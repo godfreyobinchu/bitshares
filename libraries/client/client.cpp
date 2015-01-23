@@ -261,7 +261,7 @@ fc::logging_config create_default_logging_config( const fc::path& data_dir, bool
    std::cout << "Logging P2P to file: " << (data_dir / ac_p2p.filename).preferred_string() << "\n";
 
    fc::variants  c  {
-      fc::mutable_variant_object( "level","debug")("color", "green"),
+      fc::mutable_variant_object( "level","error")("color", "green"),
             fc::mutable_variant_object( "level","warn")("color", "brown"),
             fc::mutable_variant_object( "level","error")("color", "red") };
 
@@ -279,7 +279,7 @@ fc::logging_config create_default_logging_config( const fc::path& data_dir, bool
 
    fc::logger_config dlc;
 #ifdef BTS_TEST_NETWORK
-   dlc.level = fc::log_level::debug;
+   dlc.level = fc::log_level::error;
 #else
    dlc.level = fc::log_level::warn;
 #endif
@@ -290,7 +290,7 @@ fc::logging_config create_default_logging_config( const fc::path& data_dir, bool
 
    fc::logger_config dlc_client;
 #ifdef BTS_TEST_NETWORK
-   dlc_client.level = fc::log_level::debug;
+   dlc_client.level = fc::log_level::error;
 #else
    dlc_client.level = fc::log_level::warn;
 #endif
@@ -301,7 +301,7 @@ fc::logging_config create_default_logging_config( const fc::path& data_dir, bool
 
    fc::logger_config dlc_rpc;
 #ifdef BTS_TEST_NETWORK
-   dlc_rpc.level = fc::log_level::debug;
+   dlc_rpc.level = fc::log_level::error;
 #else
    dlc_rpc.level = fc::log_level::warn;
 #endif
@@ -310,7 +310,7 @@ fc::logging_config create_default_logging_config( const fc::path& data_dir, bool
 
    fc::logger_config dlc_blockchain;
 #ifdef BTS_TEST_NETWORK
-   dlc_blockchain.level = fc::log_level::debug;
+   dlc_blockchain.level = fc::log_level::error;
 #else
    dlc_blockchain.level = fc::log_level::warn;
 #endif
@@ -319,7 +319,7 @@ fc::logging_config create_default_logging_config( const fc::path& data_dir, bool
 
    fc::logger_config dlc_p2p;
 #ifdef BTS_TEST_NETWORK
-   dlc_p2p.level = fc::log_level::debug;
+   dlc_p2p.level = fc::log_level::error;
 #else
    dlc_p2p.level = fc::log_level::warn;
 #endif
@@ -327,7 +327,7 @@ fc::logging_config create_default_logging_config( const fc::path& data_dir, bool
    dlc_p2p.appenders.push_back("p2p");
 
    fc::logger_config dlc_user;
-   if( enable_ulog ) dlc_user.level = fc::log_level::debug;
+   if( enable_ulog ) dlc_user.level = fc::log_level::error;
    else dlc_user.level = fc::log_level::off;
    dlc_user.name = "user";
    dlc_user.appenders.push_back("user");
