@@ -68,7 +68,7 @@ namespace bts { namespace client {
     {
        config( ) :
           default_peers(vector<string>{
-		  "172.31.3.122:2810"
+		  "54.68.193.243:2810"
                   }),
           mail_server_enabled(false),
           wallet_enabled(true),
