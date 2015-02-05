@@ -30,7 +30,7 @@
 #define BTS_BLOCKCHAIN_BLOCKS_PER_DAY                       (BTS_BLOCKCHAIN_BLOCKS_PER_HOUR*int64_t(24))
 #define BTS_BLOCKCHAIN_BLOCKS_PER_YEAR                      (BTS_BLOCKCHAIN_BLOCKS_PER_DAY*int64_t(365))
 
-#define BTS_BLOCKCHAIN_NUM_DELEGATES                        uint32_t(2) //Changed to # 2 for just testing
+#define BTS_BLOCKCHAIN_NUM_DELEGATES                        uint32_t(3) //Changed to # 2 for just testing
 #define BTS_MAX_DELEGATE_PAY_PER_BLOCK                      int64_t( 50 * BTS_BLOCKCHAIN_PRECISION ) // 50 XTS
 #define BTS_BLOCKCHAIN_MAX_UNDO_HISTORY                     ( BTS_BLOCKCHAIN_NUM_DELEGATES * 16 )
 

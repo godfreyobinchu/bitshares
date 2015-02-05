@@ -284,27 +284,22 @@
 
         {
             "owner": "RMB8YH5ow9yb5yXRiBLrkBk1UJ3mvKEYA1bvyAvTq8556zvVrYavz",
-            "delegate_pay_rate": "100",
             "name": "remit-init0"
         },
         {
             "owner": "RMB8KTdKT48FjN8TgHN1F9UQsGwLEgZijfMGsQ5UMM34dtxveqmX6",
-            "delegate_pay_rate": "90",
             "name": "remit-init1"
         },
         {
             "owner": "RMB8GpssDFK2dP6pMTJt4f9iHZtRjUh5fZmPBMRJXrVBgdcjaBmGp",
-            "delegate_pay_rate": "80",
             "name": "remit-init2"
         },
         {
             "owner": "RMB72UoD436LNKeEefYNCZoELd28dVMJnD6B6YWCgXEECib5zKxAy",
-            "delegate_pay_rate": "70",
             "name": "remit-init3"
         },
 	{
             "owner": "RMB8EffxTMVkBAUNT8jDq5oKPpzGUPzzqSwAqDPnS1qZyKzq9Xc4Q",
-            "delegate_pay_rate": "60",
             "name": "remit-godfrey"
         }
 
@@ -334,7 +329,22 @@
       "raw_address": "PqSC7qe31i26Wtvnk3ZwCn3j3MZdxZg5pD",
       "balance": 500000000000
     },
-
+    {
+      "raw_address": "PYJKB6soha4Qr9NGpCADzNUw6eqdRTCQ2D",
+      "balance": 500000000000
+    },
+    {
+      "raw_address": "Pm11fihfzApzCESsMeZga6SSZRq45DLdUM",
+      "balance": 500000000000
+    },
+    {
+      "raw_address": "Pnup2qasRCRDMRUid1w5JJcc94zPDiSaSQ",
+      "balance": 500000000000
+    },
+    {
+      "raw_address": "PhBnMEY9MSMx1z7nZixgLA95ecoUSmVvzo",
+      "balance": 500000000000
+    },
 
 
   ]
