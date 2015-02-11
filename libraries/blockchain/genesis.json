@@ -1,5 +1,5 @@
 {
-  "timestamp": "2015-01-20T15:40:00",
+  "timestamp": "2015-02-08T10:00:00",
   "market_assets": [{
       "symbol": "GAS",
       "name": "Gasoline 87",
@@ -110,178 +110,14 @@
       "name": "United States Dollar",
       "description": "1 United States dollar",
       "precision": 10000
-    },
-        {
-            "symbol": "RMB",
-            "description": "1 Remitabit",
-            "name": "Remitabit",
-            "precision": 10000,
-        }
+    },{
+      "symbol": "PHP",
+      "name": "Philippine Peso",
+      "description": "1 Philippine peso",
+      "precision": 10000
+    }
   ],
   "delegates": [
-    {
-      "name": "init0",
-      "delegate_pay_rate": "10",
-      "owner": "RMB6oSRyLZHfE7Dv2GWvg1Gszv3JsHAdGSxnUywANW83rrZ8y9gAd"
-    },{
-      "name": "init1",
-      "delegate_pay_rate": "10",
-      "owner": "RMB4v5U48eXdiM6J6CLpb1pn2RCLN6WMzfNiAWBc7inXvbR9zBN5W"
-    },{
-      "name": "init2",
-      "delegate_pay_rate": "10",
-      "owner": "RMB5YQxtV9rkFg3BEUQXmCwhrjx18gfe2WN24qQ2u9iSCZ4Dzu35Y"
-    },{
-      "name": "init3",
-      "delegate_pay_rate": "10",
-      "owner": "RMB5axu3dNW74Ytom3vX4SePMkiZNWhjk5ST9hcBuTv7R7w28wDRj"
-    },{
-      "name": "init4",
-      "delegate_pay_rate": "10",
-      "owner": "RMB6obhqiR9PFLTZowEtCQ1fcwvXLEwSa4SNwN4c2smCzqTDstoV9"
-    },{
-      "name": "init5",
-      "delegate_pay_rate": "10",
-      "owner": "RMB7n4UEsgwBVVQBKvX23WGFmU9Ez5jWBWHnGVQDsTYWv2DBQSuma"
-    },{
-      "name": "init6",
-      "delegate_pay_rate": "10",
-      "owner": "RMB7tDe3XoSsovs4j98SyFPozY4gCKLJer1KZVozGwYgSgB6gnvB2"
-    },{
-      "name": "init7",
-      "delegate_pay_rate": "10",
-      "owner": "RMB5VQd4fz3SwKgFdigsyvTk7H1CnrsLYfNU8x2opeSJua4XtMkAw"
-    },{
-      "name": "init8",
-      "delegate_pay_rate": "10",
-      "owner": "RMB6S885GQopxNcDHVGU1JdYc7yyhoGLt8tQ44w8GDQvaXSQHcYk8"
-    },{
-      "name": "init9",
-      "delegate_pay_rate": "10",
-      "owner": "RMB8YReTvP3J6eca8MpAMbMnDsjnpGhN7JAXPn22SfwNN1CMBzEsH"
-    },{
-      "name": "init10",
-      "delegate_pay_rate": "10",
-      "owner": "RMB8Ve4dVPVEUY3nABv1KTAuZo2Bvn57xM14djeynmWDbcDvZ8xE7"
-    },{
-      "name": "init11",
-      "delegate_pay_rate": "10",
-      "owner": "RMB77JujTdZyUugSYVGzd9cVVVbKcWVt1bRDXnCKmZfDL12AciUKM"
-    },{
-      "name": "init12",
-      "delegate_pay_rate": "10",
-      "owner": "RMB5oBpAB29gkTWyQvHemXuUJNT2Syu8ci8MrseSSncpxXfdLQaRi"
-    },{
-      "name": "init13",
-      "delegate_pay_rate": "10",
-      "owner": "RMB5mTJR68VZ6LDcMNcj2bXbQESmobDWbo18mPCv9AUGkjdhKeuhT"
-    },{
-      "name": "init14",
-      "delegate_pay_rate": "10",
-      "owner": "RMB7PDRamWyEoVDHSx6rw1rnLwYZEdUEGkKTXEJUHG8BhJcGRkuNe"
-    },{
-      "name": "init15",
-      "delegate_pay_rate": "10",
-      "owner": "RMB4zaR4wtZ1yC8bvjf1DTVLJHHZwBHfC1BqBZ8ef4HJ35j2VmYjM"
-    },{
-      "name": "init16",
-      "delegate_pay_rate": "10",
-      "owner": "RMB5Qkbz6atv4yXydVS5NoSc8u8RB5jhBLNiUfT2tXgPqjHUq1EGo"
-    },{
-      "name": "init17",
-      "delegate_pay_rate": "10",
-      "owner": "RMB5J35qqqxAFspWazXaVhtRaB2aJtkf8yF8kPbNboNTaKk7wB4tD"
-    },{
-      "name": "init18",
-      "delegate_pay_rate": "10",
-      "owner": "RMB8Xm22p4pjzbeSR9ng8BrpMBUSPVrApev1HDErf38spJmUuboar"
-    },{
-      "name": "init19",
-      "delegate_pay_rate": "10",
-      "owner": "RMB8CPcCrumWUTyzLTZK7xSKnR7VhUzCmYHukRbTkV9LhEHdjuBwC"
-    },{
-      "name": "init20",
-      "delegate_pay_rate": "10",
-      "owner": "RMB5qETqAmt7DzDbg1fiPMxEdZ9G517ZcwbaV5ridAm1d8t2ivEev"
-    },{
-      "name": "init21",
-      "delegate_pay_rate": "10",
-      "owner": "RMB8Se8JbABHK67CBbjhTRSi24JbwrD8HrHqZFaiYjrsniqs7LSj1"
-    },{
-      "name": "init22",
-      "delegate_pay_rate": "10",
-      "owner": "RMB6ArxM7RkrvmDhUNbZSZ95SQfc3XqZ9yL9hXJsPaUBRDnDjktwn"
-    },{
-      "name": "init23",
-      "delegate_pay_rate": "10",
-      "owner": "RMB8crr9jn3nFFKMMA9Yx75rU3Seo3FuZfp5hV2XJ6wTEfSLuvcKb"
-    },{
-      "name": "init24",
-      "delegate_pay_rate": "10",
-      "owner": "RMB7WjTZWHAuYyW21xJ4AYHkz4FtYDEtXvcwGoxfLf17928BFSECK"
-    },{
-      "name": "init25",
-      "delegate_pay_rate": "10",
-      "owner": "RMB6EBaJ1hZararpxXuFN8ff2Qbbx6FkZW9yVeBb15pfqXjsYx2uM"
-    },{
-      "name": "init26",
-      "delegate_pay_rate": "10",
-      "owner": "RMB6mogXZxhdkVLEvAqvjWqFvsWnH8Bdw5VhLdcA33JKxgUhaQjuD"
-    },{
-      "name": "init27",
-      "delegate_pay_rate": "10",
-      "owner": "RMB6z5zx2f25BTvHa6EFwuQu8booPSHeqeovz8zh3rBvSYak3P25o"
-    },{
-      "name": "init28",
-      "delegate_pay_rate": "10",
-      "owner": "RMB7zJKHoFPjXLTUtJpcwkYCNziU72SbhFZ49x3PxVeaWEHcZ2Efa"
-    },{
-      "name": "init29",
-      "delegate_pay_rate": "10",
-      "owner": "RMB4uxgNeDSp4QLFpscPDEyFbE36V5mwZbmUuPBmMdEMS64agYkfa"
-    },{
-      "name": "init30",
-      "delegate_pay_rate": "10",
-      "owner": "RMB8k6Td3JdatsCoPYQWRbpdm53S8Zj8ozhk53AZFy3rTAihY13ga"
-    },{
-      "name": "init31",
-      "delegate_pay_rate": "10",
-      "owner": "RMB6H6WNPgeTYHdZz66zgByQRGo46MXnFihbpsuQS8RGtMdRKxFFy"
-    },{
-      "name": "init32",
-      "delegate_pay_rate": "10",
-      "owner": "RMB6HSkH3H8U9RpwjFUVdma9apBB8aLjoYHjdPQPFTBznnWDGu6jB"
-    },{
-      "name": "init33",
-      "delegate_pay_rate": "10",
-      "owner": "RMB7nMZLmKQ7EfSr7ZLfD9eqA4VHQrVpFZD4GtZBvVKCvv7jgJMSD"
-    },{
-      "name": "init34",
-      "delegate_pay_rate": "10",
-      "owner": "RMB8GfFpAGvUwnyQh4aZoBLGWNFQoCVbUZxE3eam3jZSUTFXQA1w4"
-    },{
-      "name": "init35",
-      "delegate_pay_rate": "10",
-      "owner": "RMB54W3qR2DsDELjkAJHW9bhSmHorkibVeDPg9ZDeKeo9zSBQnxoq"
-    },{
-      "name": "init36",
-      "delegate_pay_rate": "10",
-      "owner": "RMB7VGRvR6MNyzPTH73kuniW1ok9kMPo9vCmb1jEHkFqwyHSMEB2Z"
-    },{
-      "name": "init37",
-      "delegate_pay_rate": "10",
-      "owner": "RMB7rxtTic4xEvBmwZZGnds3xrZJQrmnDitrkPvcZoMqH2huJuFWA"
-    },{
-      "name": "init38",
-      "delegate_pay_rate": "10",
-      "owner": "RMB63TtUxDtptvrMWBUWVPYNbATxF68h6vtqnxz5eshNtzLG9fG9h"
-    },{
-      "name": "init39",
-      "delegate_pay_rate": "10",
-      "owner": "RMB6xq8JqRDhTXeAT3LgLRk2243oqg2rv2HyPbPcoePpnYMt9LmVy"
-    },
-
-
         {
             "owner": "RMB8YH5ow9yb5yXRiBLrkBk1UJ3mvKEYA1bvyAvTq8556zvVrYavz",
             "name": "remit-init0"
@@ -300,7 +136,7 @@
         },
 	{
             "owner": "RMB8EffxTMVkBAUNT8jDq5oKPpzGUPzzqSwAqDPnS1qZyKzq9Xc4Q",
-            "name": "remit-godfrey"
+            "name": "remit-init4"
         }
 
 
@@ -310,41 +146,42 @@
   "initial_balances": [
     {
       "raw_address": "PaMDzPVrRm4AjkznGqjSHNuKxWfCHZNsGK",
-      "balance": 500000000000
+      "balance": 1000000000000
     },
     {
       "raw_address": "PvfDtFNMWFwzY13hjmqkBUwxkETqn3yPZ5",
-      "balance": 500000000000
+      "balance": 1000000000000
     },
     {
       "raw_address": "PiPadPmZAP4kcYHLs99289DZe8kdUHWwqN",
-      "balance": 500000000000
+      "balance": 1000000000000
     },
     {
       "raw_address": "Pgvb7vpZhLWxdqPJuCpf8uc8Z32LNDjPs9",
-      "balance": 500000000000
+      "balance": 1000000000000
     },
-,
     {
       "raw_address": "PqSC7qe31i26Wtvnk3ZwCn3j3MZdxZg5pD",
-      "balance": 500000000000
+      "balance": 1000000000000
     },
+
+
     {
       "raw_address": "PYJKB6soha4Qr9NGpCADzNUw6eqdRTCQ2D",
-      "balance": 500000000000
+      "balance": 1250000000000
     },
     {
       "raw_address": "Pm11fihfzApzCESsMeZga6SSZRq45DLdUM",
-      "balance": 500000000000
+      "balance": 1250000000000
     },
     {
       "raw_address": "Pnup2qasRCRDMRUid1w5JJcc94zPDiSaSQ",
-      "balance": 500000000000
+      "balance": 1250000000000
     },
     {
       "raw_address": "PhBnMEY9MSMx1z7nZixgLA95ecoUSmVvzo",
-      "balance": 500000000000
-    },
+      "balance": 1250000000000
+    }
 
 
   ]
