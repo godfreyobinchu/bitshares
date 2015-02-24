@@ -19,8 +19,8 @@
  *
  *  Changing these parameters will result in a hard fork.
  */
-#define BTS_ADDRESS_PREFIX                                  "RMB"
-#define BTS_BLOCKCHAIN_SYMBOL                               "RMB"
+#define BTS_ADDRESS_PREFIX                                  "RMBT"
+#define BTS_BLOCKCHAIN_SYMBOL                               "RMBT"
 #define BTS_BLOCKCHAIN_NAME                                 "Remitabit"
 #define BTS_BLOCKCHAIN_DESCRIPTION                          "Peer2peer remittance"
 #define BTS_BLOCKCHAIN_PRECISION                            100000
