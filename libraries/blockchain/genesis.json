@@ -119,23 +119,23 @@
   ],
   "delegates": [
         {
-            "owner": "RMB8YH5ow9yb5yXRiBLrkBk1UJ3mvKEYA1bvyAvTq8556zvVrYavz",
+            "owner": "RMBT8YH5ow9yb5yXRiBLrkBk1UJ3mvKEYA1bvyAvTq8556zvVrYavz",
             "name": "remit-init0"
         },
         {
-            "owner": "RMB8KTdKT48FjN8TgHN1F9UQsGwLEgZijfMGsQ5UMM34dtxveqmX6",
+            "owner": "RMBT8KTdKT48FjN8TgHN1F9UQsGwLEgZijfMGsQ5UMM34dtxveqmX6",
             "name": "remit-init1"
         },
         {
-            "owner": "RMB8GpssDFK2dP6pMTJt4f9iHZtRjUh5fZmPBMRJXrVBgdcjaBmGp",
+            "owner": "RMBT8GpssDFK2dP6pMTJt4f9iHZtRjUh5fZmPBMRJXrVBgdcjaBmGp",
             "name": "remit-init2"
         },
         {
-            "owner": "RMB72UoD436LNKeEefYNCZoELd28dVMJnD6B6YWCgXEECib5zKxAy",
+            "owner": "RMBT72UoD436LNKeEefYNCZoELd28dVMJnD6B6YWCgXEECib5zKxAy",
             "name": "remit-init3"
         },
 	{
-            "owner": "RMB8EffxTMVkBAUNT8jDq5oKPpzGUPzzqSwAqDPnS1qZyKzq9Xc4Q",
+            "owner": "RMBT8EffxTMVkBAUNT8jDq5oKPpzGUPzzqSwAqDPnS1qZyKzq9Xc4Q",
             "name": "remit-init4"
         }
 

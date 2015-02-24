@@ -523,6 +523,7 @@ namespace detail
 void client_impl::configure_rpc_server(config& cfg,
                                        const program_options::variables_map& option_variables)
 {
+ilog( "Remit: Entering <configure_rpc_server>" );
    if( option_variables.count("server") || option_variables.count("daemon") || cfg.rpc.enable )
    {
       // the user wants us to launch the RPC server.
@@ -581,33 +582,41 @@ void client_impl::configure_rpc_server(config& cfg,
    {
       std::cout << "Not starting RPC server, use --server to enable the RPC interface\n";
    }
+ilog( "Remit: Entering <configure_rpc_server>" );
 }
 
 void client_impl::configure_chain_server(config& cfg, const program_options::variables_map& option_variables)
 {
+ilog( "Remit: Entering <configure_delegate_loop>" );
    if( option_variables.count("chain-server-port") )
    {
       cfg.chain_server.listen_port = option_variables["chain-server-port"].as<uint16_t>();
       cfg.chain_server.enabled = true;
    }
+ilog( "Remit: Leaving <configure_delegate_loop>" );
 }
 
 // Call this whenever a change occurs that may enable block production by the client
 void client_impl::reschedule_delegate_loop()
 {
+ilog( "Remit: Entering <reschedule_delegate_loop>" );
    if( !_delegate_loop_complete.valid() || _delegate_loop_complete.ready() )
       start_delegate_loop();
+ilog( "Remit: Leaving <reschedule_delegate_loop>" );
 }
 
 void client_impl::start_delegate_loop()
 {
+ilog( "Remit: Entering <start_delegate_loop>" );
    if (!_time_discontinuity_connection.connected())
       _time_discontinuity_connection = bts::blockchain::time_discontinuity_signal.connect([=](){ reschedule_delegate_loop(); });
    _delegate_loop_complete = fc::async( [=](){ delegate_loop(); }, "delegate_loop" );
+ilog( "Remit: Leaving <start_delegate_loop>" );
 }
 
 void client_impl::cancel_delegate_loop()
 {
+ilog( "Remit: Entering <cancel_delegate_loop>" );
    try
    {
       ilog( "Canceling delegate loop..." );
@@ -622,25 +631,33 @@ void client_impl::cancel_delegate_loop()
 
 void client_impl::delegate_loop()
 {
+ilog( "Remit: Entering <delegate_loop>" );
    if( !_wallet->is_open() || _wallet->is_locked() )
       return;
 
+ilog( "Remit: Continuing <delegate_loop> 0" );
    vector<wallet_account_record> enabled_delegates = _wallet->get_my_delegates( enabled_delegate_status );
    if( enabled_delegates.empty() )
       return;
 
+ilog( "Remit: Continuing <delegate_loop> 1" );
    const auto now = blockchain::now();
    ilog( "Starting delegate loop at time: ${t}", ("t",now) );
 
    if( _delegate_loop_first_run )
    {
+ilog( "Remit: First Run  <delegate_loop>" );
       set_target_connections( BTS_NET_DELEGATE_DESIRED_CONNECTIONS );
       _delegate_loop_first_run = false;
    }
 
+ilog( "Remit: Continuing <delegate_loop> 2" );
    const auto next_block_time = _wallet->get_next_producible_block_timestamp( enabled_delegates );
    if( next_block_time.valid() )
    {
+
+ilog( "Remit: Continuing <delegate_loop> 3" );
+
       // delegates don't get to skip this check, they must check up on everyone else
       _chain_db->skip_signature_verification( false );
       ilog( "Producing block at time: ${t}", ("t",*next_block_time) );
@@ -649,6 +666,7 @@ void client_impl::delegate_loop()
       {
          try
          {
+ilog( "Remit: trying to produce a block" );
             _delegate_config.validate();
 
             FC_ASSERT( network_get_connection_count() >= _delegate_config.network_min_connection_count,
@@ -677,6 +695,7 @@ void client_impl::delegate_loop()
       }
    }
 
+ilog( "Remit: Did we produce a block?" );
    uint32_t slot_number = blockchain::get_slot_number( now );
    time_point_sec next_slot_time = blockchain::get_slot_start_time( slot_number + 1 );
    ilog( "Rescheduling delegate loop for time: ${t}", ("t",next_slot_time) );
@@ -692,6 +711,9 @@ void client_impl::delegate_loop()
 
    if (!_delegate_loop_complete.canceled())
       _delegate_loop_complete = fc::schedule( [=](){ delegate_loop(); }, scheduled_time, "delegate_loop" );
+
+ilog( "Remit: Departing <delegate_loop>" );
+
 }
 
 void client_impl::set_target_connections( uint32_t target )
