@@ -38,9 +38,17 @@ public:
 private:
    exception_leveldb_type _db;
 public:
-   void open(const fc::path& filename, bool create = true)
+   void open(const fc::path& filename)
    {
-      _db.open(filename, create);
+      try
+      {
+          _db.open(filename);
+      }
+      catch (const bts::db::level_map_open_failure&)
+      {
+          fc::remove_all(filename);
+          _db.open(filename);
+      }
    }
    void store(const fc::exception& e)
    {
@@ -219,7 +227,7 @@ public:
    virtual fc::sha256 get_chain_id() const override
    {
       FC_ASSERT( _chain_db != nullptr );
-      return _chain_db->chain_id();
+      return _chain_db->get_chain_id();
    }
    virtual std::vector<bts::net::item_hash_t> get_blockchain_synopsis(uint32_t item_type,
                                                                       const bts::net::item_hash_t& reference_point = bts::net::item_hash_t(),
@@ -290,7 +298,10 @@ public:
    bool                                                    _sync_mode = false;
 
    rpc_server_config                                       _tmp_rpc_config;
+
    bts::net::node_ptr                                      _p2p_node = nullptr;
+   bool                                                    _simulated_network = false;
+
    bts_gntp_notifier_ptr                                   _notifier;
    fc::future<void>                                        _blocks_too_old_monitor_done;
 

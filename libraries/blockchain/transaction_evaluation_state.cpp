@@ -1,3 +1,4 @@
+#include <bts/blockchain/balance_operations.hpp>
 #include <bts/blockchain/operation_factory.hpp>
 #include <bts/blockchain/pending_chain_state.hpp>
 #include <bts/blockchain/transaction_evaluation_state.hpp>
@@ -30,7 +31,7 @@ namespace bts { namespace blockchain {
 
    bool transaction_evaluation_state::check_signature( const address& a )const
    { try {
-      return  _skip_signature_check || signed_keys.find( a ) != signed_keys.end();
+      return _skip_signature_check || signed_keys.find( a ) != signed_keys.end();
    } FC_CAPTURE_AND_RETHROW( (a) ) }
 
    bool transaction_evaluation_state::check_multisig( const multisig_condition& condition )const
@@ -96,22 +97,17 @@ namespace bts { namespace blockchain {
        return any_parent_has_signed( record.name );
    } FC_CAPTURE_AND_RETHROW( (record) ) }
 
-   void transaction_evaluation_state::verify_delegate_id( const account_id_type id )const
-   { try {
-      auto current_account = _current_state->get_account_record( id );
-      if( !current_account ) FC_CAPTURE_AND_THROW( unknown_account_id, (id) );
-      if( !current_account->is_delegate() ) FC_CAPTURE_AND_THROW( not_a_delegate, (id) );
-   } FC_CAPTURE_AND_RETHROW( (id) ) }
-
    void transaction_evaluation_state::update_delegate_votes()
    { try {
-      for( const auto& del_vote : net_delegate_votes )
+      for( const auto& item : delegate_vote_deltas )
       {
-         auto del_rec = _current_state->get_account_record( del_vote.first );
-         FC_ASSERT( !!del_rec );
-         del_rec->adjust_votes_for( del_vote.second );
+          const account_id_type id = item.first;
+          oaccount_record delegate_record = _current_state->get_account_record( id );
+          FC_ASSERT( delegate_record.valid() && delegate_record->is_delegate() );
 
-         _current_state->store_account_record( *del_rec );
+          const share_type amount = item.second;
+          delegate_record->adjust_votes_for( amount );
+          _current_state->store_account_record( *delegate_record );
       }
    } FC_CAPTURE_AND_RETHROW() }
 
@@ -120,6 +116,12 @@ namespace bts { namespace blockchain {
       asset xts_fees;
       auto fee_itr = balance.find( 0 );
       if( fee_itr != balance.end() ) xts_fees += asset( fee_itr->second, 0);
+
+      auto max_fee_itr = _max_fee.find( 0 );
+      if( max_fee_itr != _max_fee.end() )
+      {
+         FC_ASSERT( xts_fees.amount <= max_fee_itr->second, "", ("max_fee",_max_fee)("xts_fees",xts_fees) );
+      }
 
       xts_fees += alt_fees_paid;
 
@@ -164,8 +166,24 @@ namespace bts { namespace blockchain {
          const oprice median_price = _current_state->get_active_feed_price( fee.first );
          if( median_price.valid() )
          {
-            // fees paid in something other than XTS are discounted 50%
-            alt_fees_paid += asset( (fee.second*2)/3, fee.first ) * *median_price;
+#ifndef WIN32
+#warning [SOFTFORK] Remove this check after BTS_V0_6_3_FORK_BLOCK_NUM has passed
+#endif
+            if( _current_state->get_head_block_num() >= BTS_V0_6_3_FORK_BLOCK_NUM )
+            {
+                // fees paid in something other than XTS are discounted 50%
+                alt_fees_paid += (asset( fee.second * 2, fee.first ) * *median_price) / 3;
+            }
+            else
+            {
+                alt_fees_paid += asset( (fee.second*2)/3, fee.first ) * *median_price;
+            }
+
+            auto max_fee_itr = _max_fee.find( fee.first );
+            if( max_fee_itr != _max_fee.end() )
+            {
+               FC_ASSERT( fee.second <= max_fee_itr->second );
+            }
          }
       }
 
@@ -184,10 +202,9 @@ namespace bts { namespace blockchain {
       }
    } FC_CAPTURE_AND_RETHROW() }
 
-   void transaction_evaluation_state::evaluate( const signed_transaction& trx_arg, bool skip_signature_check, bool enforce_canonical )
+   void transaction_evaluation_state::evaluate( const signed_transaction& trx_arg )
    { try {
       trx = trx_arg;
-      _skip_signature_check = skip_signature_check;
       try {
         if( _current_state->now() >= trx_arg.expiration )
         {
@@ -203,15 +220,15 @@ namespace bts { namespace blockchain {
         if( _current_state->get_head_block_num() >= BTS_V0_4_26_FORK_BLOCK_NUM )
         {
             if( _current_state->is_known_transaction( trx_arg ) )
-               FC_CAPTURE_AND_THROW( duplicate_transaction, (trx_arg.id()) );
+               FC_CAPTURE_AND_THROW( duplicate_transaction, (trx.id()) );
         }
 
         if( !_skip_signature_check )
         {
-           const auto trx_digest = trx_arg.digest( _current_state->chain_id() );
+           const auto trx_digest = trx_arg.digest( _current_state->get_chain_id() );
            for( const auto& sig : trx_arg.signatures )
            {
-              auto key = fc::ecc::public_key( sig, trx_digest, enforce_canonical ).serialize();
+              const auto key = fc::ecc::public_key( sig, trx_digest, _enforce_canonical_signatures ).serialize();
               signed_keys.insert( address(key) );
               signed_keys.insert( address(pts_address(key,false,56) ) );
               signed_keys.insert( address(pts_address(key,true,56) )  );
@@ -228,30 +245,43 @@ namespace bts { namespace blockchain {
         post_evaluate();
         validate_required_fee();
         update_delegate_votes();
+
+        _current_state->store_transaction( trx.id(), transaction_record( transaction_location(), *this ) );
       }
       catch ( const fc::exception& e )
       {
          validation_error = e;
          throw;
       }
-   } FC_CAPTURE_AND_RETHROW( (trx_arg)(skip_signature_check)(enforce_canonical) ) }
+   } FC_CAPTURE_AND_RETHROW( (trx_arg) ) }
 
    void transaction_evaluation_state::evaluate_operation( const operation& op )
    { try {
       operation_factory::instance().evaluate( *this, op );
    } FC_CAPTURE_AND_RETHROW( (op) ) }
 
-   void transaction_evaluation_state::adjust_vote( slate_id_type slate_id, share_type amount )
+   void transaction_evaluation_state::adjust_vote( const slate_id_type slate_id, const share_type amount )
    { try {
-      if( slate_id )
-      {
-         auto slate = _current_state->get_delegate_slate( slate_id );
-         if( !slate ) FC_CAPTURE_AND_THROW( unknown_delegate_slate, (slate_id) );
-         for( const auto& delegate_id : slate->supported_delegates )
-         {
-            net_delegate_votes[ abs( delegate_id ) ] += amount;
-         }
-      }
+       if( slate_id == 0 || _skip_vote_adjustment )
+           return;
+
+       const oslate_record slate_record = _current_state->get_slate_record( slate_id );
+       if( !slate_record.valid() )
+           FC_CAPTURE_AND_THROW( unknown_delegate_slate, (slate_id) );
+
+       if( slate_record->duplicate_slate.empty() )
+       {
+           for( const account_id_type id : slate_record->slate )
+           {
+               if( id >= 0 )
+                   delegate_vote_deltas[ id ] += amount;
+           }
+       }
+       else
+       {
+           for( const account_id_type id : slate_record->duplicate_slate )
+               delegate_vote_deltas[ id ] += amount;
+       }
    } FC_CAPTURE_AND_RETHROW( (slate_id)(amount) ) }
 
    share_type transaction_evaluation_state::get_fees( asset_id_type id )const
@@ -286,7 +316,7 @@ namespace bts { namespace blockchain {
          FC_CAPTURE_AND_THROW( unknown_asset_id, (asset_to_validate) );
    } FC_CAPTURE_AND_RETHROW( (asset_to_validate) ) }
 
-   bool transaction_evaluation_state::scan_deltas( uint32_t op_index, function<bool( const asset& )> callback )const
+   bool transaction_evaluation_state::scan_deltas( const uint32_t op_index, const function<bool( const asset& )> callback )const
    { try {
        bool ret = false;
        for( const auto& item : deltas )
@@ -301,5 +331,38 @@ namespace bts { namespace blockchain {
        }
        return ret;
    } FC_CAPTURE_AND_RETHROW( (op_index) ) }
+
+   void transaction_evaluation_state::scan_addresses( const chain_interface& chain,
+                                                      const function<void( const address& )> callback )const
+   { try {
+       for( const operation& op : trx.operations )
+       {
+           switch( operation_type_enum( op.type ) )
+           {
+               case withdraw_op_type:
+               {
+                   const obalance_record balance_record = chain.get_balance_record( op.as<withdraw_operation>().balance_id );
+                   if( balance_record.valid() )
+                   {
+                       const set<address>& owners = balance_record->owners();
+                       for( const address& addr : owners )
+                           callback( addr );
+                   }
+                   break;
+               }
+               case deposit_op_type:
+               {
+                   const set<address>& owners = op.as<deposit_operation>().condition.owners();
+                   for( const address& addr : owners )
+                       callback( addr );
+                   break;
+               }
+               default:
+               {
+                   break;
+               }
+           }
+       }
+   } FC_CAPTURE_AND_RETHROW() }
 
 } } // bts::blockchain

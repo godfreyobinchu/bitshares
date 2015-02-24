@@ -11,8 +11,10 @@
 
 namespace bts { namespace blockchain { namespace detail {
 
-void chain_database_impl::pay_delegate_v1( const pending_chain_state_ptr& pending_state, const public_key_type& block_signee,
-                                           const block_id_type& block_id, block_record& record )
+void chain_database_impl::pay_delegate_v1( const block_id_type& block_id,
+                                           const public_key_type& block_signee,
+                                           const pending_chain_state_ptr& pending_state,
+                                           oblock_record& record )const
 { try {
       oaccount_record delegate_record = self->get_account_record( address( block_signee ) );
       FC_ASSERT( delegate_record.valid() );
@@ -47,12 +49,16 @@ void chain_database_impl::pay_delegate_v1( const pending_chain_state_ptr& pendin
       delegate_record->delegate_info->total_paid += accepted_paycheck;
       pending_state->store_account_record( *delegate_record );
 
-      record.signee_shares_issued = 0;
-      record.signee_fees_collected = accepted_paycheck;
-      record.signee_fees_destroyed = burned_paycheck;
-} FC_CAPTURE_AND_RETHROW( (block_signee)(block_id)(record) ) }
+      if( record.valid() )
+      {
+          record->signee_shares_issued = 0;
+          record->signee_fees_collected = accepted_paycheck;
+          record->signee_fees_destroyed = burned_paycheck;
+      }
+} FC_CAPTURE_AND_RETHROW( (block_id)(block_signee)(record) ) }
 
-void chain_database_impl::execute_markets_v1( const fc::time_point_sec timestamp, const pending_chain_state_ptr& pending_state )
+void chain_database_impl::execute_markets_v1( const fc::time_point_sec timestamp,
+                                              const pending_chain_state_ptr& pending_state )const
 { try {
   vector<market_transaction> market_transactions;
 
@@ -74,15 +80,7 @@ void chain_database_impl::execute_markets_v1( const fc::time_point_sec timestamp
   for( const auto& market_pair : dirty_markets )
   {
      FC_ASSERT( market_pair.first > market_pair.second );
-     if( pending_block_num >= BTS_V0_4_29_FORK_BLOCK_NUM )
-     {
-        market_engine engine( pending_state, *this );
-        if( engine.execute( market_pair.first, market_pair.second, timestamp ) )
-        {
-           market_transactions.insert( market_transactions.end(), engine._market_transactions.begin(), engine._market_transactions.end() );
-        }
-     }
-     else if( pending_block_num > BTS_V0_4_21_FORK_BLOCK_NUM )
+     if( pending_block_num > BTS_V0_4_21_FORK_BLOCK_NUM )
      {
         market_engine_v7 engine( pending_state, *this );
         if( engine.execute( market_pair.first, market_pair.second, timestamp ) )
@@ -156,6 +154,6 @@ void chain_database_impl::execute_markets_v1( const fc::time_point_sec timestamp
       pending_state->set_dirty_markets( pending_state->_dirty_markets );
 
   pending_state->set_market_transactions( std::move( market_transactions ) );
-} FC_CAPTURE_AND_RETHROW() }
+} FC_CAPTURE_AND_RETHROW( (timestamp) ) }
 
 } } } // bts::blockchain::detail

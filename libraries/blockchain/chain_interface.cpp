@@ -17,7 +17,7 @@ namespace bts { namespace blockchain {
       return optional<string>();
    }
 
-   bool chain_interface::is_valid_account_name( const string& name )const
+   bool chain_interface::is_valid_account_name( const string& name )
    { try {
       if( name.size() < BTS_BLOCKCHAIN_MIN_NAME_SIZE ) return false;
       if( name.size() > BTS_BLOCKCHAIN_MAX_NAME_SIZE ) return false;
@@ -65,7 +65,7 @@ namespace bts { namespace blockchain {
     */
    bool chain_interface::is_valid_symbol_name( const string& symbol )const
    { try {
-       if( get_head_block_num() < DVS_V0_5_0_FORK_BLOCK_NUM )
+       if( get_head_block_num() < BTS_V0_5_0_FORK_BLOCK_NUM )
            return is_valid_symbol_name_v1( symbol );
 
        FC_ASSERT( symbol != "BTSX" );
@@ -145,6 +145,7 @@ namespace bts { namespace blockchain {
        if( get_head_block_num() < BTS_V0_4_24_FORK_BLOCK_NUM )
            return get_delegate_registration_fee_v1( pay_rate );
 
+       if( pay_rate == 0 ) return 0;
        static const uint32_t blocks_per_two_weeks = 14 * BTS_BLOCKCHAIN_BLOCKS_PER_DAY;
        const share_type max_total_pay_per_two_weeks = blocks_per_two_weeks * get_max_delegate_pay_issued_per_block();
        const share_type max_pay_per_two_weeks = max_total_pay_per_two_weeks / BTS_BLOCKCHAIN_NUM_DELEGATES;
@@ -341,36 +342,7 @@ namespace bts { namespace blockchain {
    { try {
       const auto record = get_asset_record( symbol );
       if( !record ) FC_CAPTURE_AND_THROW( unknown_asset_symbol, (symbol) );
-      asset ugly_asset(0, record->id);
-
-      const auto decimal = amount.find(".");
-      ugly_asset.amount += atoll(amount.substr(0, decimal).c_str()) * record->precision;
-
-      if( decimal != string::npos )
-      {
-          string fraction_string = amount.substr(decimal+1);
-          share_type fraction = atoll(fraction_string.c_str());
-
-          if( !fraction_string.empty() && fraction > 0 )
-          {
-              while( fraction < record->precision )
-                 fraction *= 10;
-              while( fraction >= record->precision )
-                 fraction /= 10;
-              while( fraction_string.size() && fraction_string[0] == '0')
-              {
-                 fraction /= 10;
-                 fraction_string.erase(0, 1);
-              }
-
-              if( ugly_asset.amount >= 0 )
-                  ugly_asset.amount += fraction;
-              else
-                  ugly_asset.amount -= fraction;
-          }
-      }
-
-      return ugly_asset;
+      return record->asset_from_string(amount);
    } FC_CAPTURE_AND_RETHROW( (amount)(symbol) ) }
 
    price chain_interface::to_ugly_price(const std::string& price_string,
@@ -395,21 +367,39 @@ namespace bts { namespace blockchain {
    string chain_interface::to_pretty_asset( const asset& a )const
    { try {
       const auto oasset = get_asset_record( a.asset_id );
-      const share_type amount = ( a.amount >= 0 ) ? a.amount : -a.amount;
-      if( oasset.valid() )
-      {
-         const auto precision = oasset->precision;
-         string decimal = fc::to_string( precision + ( amount % precision ) );
-         decimal[0] = '.';
-         const auto str = fc::to_pretty_string( amount / precision ) + decimal + " " + oasset->symbol;
-         if( a.amount < 0 ) return "-" + str;
-         return str;
-      }
-      else
-      {
-         return fc::to_pretty_string( a.amount ) + " ???";
-      }
+      if( oasset.valid() ) return oasset->amount_to_string(a.amount);
+      return fc::to_pretty_string( a.amount ) + " ???";
    } FC_CAPTURE_AND_RETHROW( (a) ) }
+
+   void chain_interface::set_chain_id( const digest_type& id )
+   { try {
+      set_property( chain_id, variant( id ) );
+   } FC_CAPTURE_AND_RETHROW( (id) ) }
+
+   digest_type chain_interface::get_chain_id()const
+   { try {
+      static optional<digest_type> value;
+      if( value.valid() ) return *value;
+      const optional<variant> result = get_property( chain_id );
+      FC_ASSERT( result.valid() );
+      value = result->as<digest_type>();
+      return *value;
+   } FC_CAPTURE_AND_RETHROW() }
+
+   void chain_interface::set_statistics_enabled( const bool enabled )
+   { try {
+      set_property( statistics_enabled, variant( enabled ) );
+   } FC_CAPTURE_AND_RETHROW( (enabled) ) }
+
+   bool chain_interface::get_statistics_enabled()const
+   { try {
+      static optional<bool> value;
+      if( value.valid() ) return *value;
+      const optional<variant> result = get_property( statistics_enabled );
+      FC_ASSERT( result.valid() );
+      value = result->as_bool();
+      return *value;
+   } FC_CAPTURE_AND_RETHROW() }
 
    void chain_interface::set_required_confirmations( uint64_t c )
    { try {
@@ -434,5 +424,85 @@ namespace bts { namespace blockchain {
       if( result.valid() ) return result->as<std::set<std::pair<asset_id_type, asset_id_type>>>();
       return std::set<std::pair<asset_id_type, asset_id_type>>();
    } FC_CAPTURE_AND_RETHROW() }
+
+   oaccount_record chain_interface::get_account_record( const account_id_type id )const
+   { try {
+       return lookup<account_record>( id );
+   } FC_CAPTURE_AND_RETHROW( (id) ) }
+
+   oaccount_record chain_interface::get_account_record( const string& name )const
+   { try {
+       return lookup<account_record>( name );
+   } FC_CAPTURE_AND_RETHROW( (name) ) }
+
+   oaccount_record chain_interface::get_account_record( const address& addr )const
+   { try {
+       return lookup<account_record>( addr );
+   } FC_CAPTURE_AND_RETHROW( (addr) ) }
+
+   void chain_interface::store_account_record( const account_record& record )
+   { try {
+       store( record.id, record );
+   } FC_CAPTURE_AND_RETHROW( (record) ) }
+
+   oasset_record chain_interface::get_asset_record( const asset_id_type id )const
+   { try {
+       return lookup<asset_record>( id );
+   } FC_CAPTURE_AND_RETHROW( (id) ) }
+
+   oasset_record chain_interface::get_asset_record( const string& symbol )const
+   { try {
+       return lookup<asset_record>( symbol );
+   } FC_CAPTURE_AND_RETHROW( (symbol) ) }
+
+   void chain_interface::store_asset_record( const asset_record& record )
+   { try {
+       store( record.id, record );
+   } FC_CAPTURE_AND_RETHROW( (record) ) }
+
+   obalance_record chain_interface::get_balance_record( const balance_id_type& id )const
+   { try {
+       return lookup<balance_record>( id );
+   } FC_CAPTURE_AND_RETHROW( (id) ) }
+
+   void chain_interface::store_balance_record( const balance_record& record )
+   { try {
+       store( record.id(), record );
+   } FC_CAPTURE_AND_RETHROW( (record) ) }
+
+   oslate_record chain_interface::get_slate_record( const slate_id_type id )const
+   { try {
+       return lookup<slate_record>( id );
+   } FC_CAPTURE_AND_RETHROW( (id) ) }
+
+   void chain_interface::store_slate_record( const slate_record& record )
+   { try {
+       store( record.id(), record );
+   } FC_CAPTURE_AND_RETHROW( (record) ) }
+
+   ofeed_record chain_interface::get_feed_record( const feed_index index )const
+   { try {
+       return lookup<feed_record>( index );
+   } FC_CAPTURE_AND_RETHROW( (index) ) }
+
+   void chain_interface::store_feed_record( const feed_record& record )
+   { try {
+       store( record.index, record );
+   } FC_CAPTURE_AND_RETHROW( (record) ) }
+
+   oslot_record chain_interface::get_slot_record( const slot_index index )const
+   { try {
+       return lookup<slot_record>( index );
+   } FC_CAPTURE_AND_RETHROW( (index) ) }
+
+   oslot_record chain_interface::get_slot_record( const time_point_sec timestamp )const
+   { try {
+       return lookup<slot_record>( timestamp );
+   } FC_CAPTURE_AND_RETHROW( (timestamp) ) }
+
+   void chain_interface::store_slot_record( const slot_record& record )
+   { try {
+       store( record.index, record );
+   } FC_CAPTURE_AND_RETHROW( (record) ) }
 
 } } // bts::blockchain

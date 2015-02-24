@@ -7,9 +7,9 @@
 
 namespace bts { namespace blockchain {
 
-   void update_feed_operation::evaluate( transaction_evaluation_state& eval_state )
+   void update_feed_operation::evaluate( transaction_evaluation_state& eval_state )const
    { try {
-      if( eval_state._current_state->get_head_block_num() < DVS_V0_5_0_FORK_BLOCK_NUM )
+      if( eval_state._current_state->get_head_block_num() < BTS_V0_5_0_FORK_BLOCK_NUM )
           return evaluate_v1( eval_state );
 
       const oaccount_record account_record = eval_state._current_state->get_account_record( index.delegate_id );
@@ -48,7 +48,7 @@ namespace bts { namespace blockchain {
       if( !asset_record->is_market_issued() )
           FC_CAPTURE_AND_THROW( invalid_market, (index.quote_id) );
 
-      eval_state._current_state->set_feed( feed_record{ index, feed_price, eval_state._current_state->now() } );
+      eval_state._current_state->store_feed_record( feed_record{ index, feed_price, eval_state._current_state->now() } );
       eval_state._current_state->set_market_dirty( feed_price.quote_asset_id, feed_price.base_asset_id );
    } FC_CAPTURE_AND_RETHROW( (*this) ) }
 

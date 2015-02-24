@@ -5,7 +5,7 @@
 
 namespace bts { namespace blockchain {
 
-void update_feed_operation::evaluate_v1( transaction_evaluation_state& eval_state )
+void update_feed_operation::evaluate_v1( transaction_evaluation_state& eval_state )const
 { try {
    const oaccount_record account_record = eval_state._current_state->get_account_record( index.delegate_id );
    if( !account_record.valid() )
@@ -31,7 +31,7 @@ void update_feed_operation::evaluate_v1( transaction_evaluation_state& eval_stat
    {
        try
        {
-           eval_state._current_state->set_feed( feed_record{ index, value.as<price>(), eval_state._current_state->now() } );
+           eval_state._current_state->store_feed_record( feed_record{ index, value.as<price>(), eval_state._current_state->now() } );
        }
        catch( const fc::bad_cast_exception& )
        {

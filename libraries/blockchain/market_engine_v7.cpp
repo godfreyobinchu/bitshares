@@ -7,7 +7,7 @@
 
 namespace bts { namespace blockchain { namespace detail {
 
-  market_engine_v7::market_engine_v7( pending_chain_state_ptr ps, chain_database_impl& cdi )
+  market_engine_v7::market_engine_v7( const pending_chain_state_ptr ps, const chain_database_impl& cdi )
   :_pending_state(ps),_db_impl(cdi)
   {
       _pending_state = std::make_shared<pending_chain_state>( ps );
@@ -45,6 +45,12 @@ namespace bts { namespace blockchain { namespace detail {
           oasset_record base_asset = _pending_state->get_asset_record( _base_id );
           FC_ASSERT( quote_asset.valid() && base_asset.valid() );
 
+          if( _pending_state->get_head_block_num() >= BTS_V0_6_0_FORK_BLOCK_NUM )
+          {
+              FC_ASSERT( !_pending_state->is_fraudulent_asset( *quote_asset ) );
+              FC_ASSERT( !_pending_state->is_fraudulent_asset( *base_asset ) );
+          }
+
           // The order book is sorted from low to high price. So to get the last item (highest bid),
           // we need to go to the first item in the next market class and then back up one
           const price next_pair = (base_id+1 == quote_id) ? price( 0, quote_id+1, 0 ) : price( 0, quote_id, base_id+1 );
@@ -71,7 +77,7 @@ namespace bts { namespace blockchain { namespace detail {
           if( _short_itr.valid() )   --_short_itr;
           else _short_itr = _db_impl._short_db.last();
 
-          if( _pending_state->get_head_block_num() >= DVS_V0_5_0_FORK_BLOCK_NUM )
+          if( _pending_state->get_head_block_num() >= BTS_V0_5_0_FORK_BLOCK_NUM )
           {
               // Market issued assets cannot match until the first time there is a median feed; assume feed price base id 0
               if( quote_asset->is_market_issued() && base_asset->id == asset_id_type( 0 ) )

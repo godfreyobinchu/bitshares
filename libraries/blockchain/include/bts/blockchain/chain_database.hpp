@@ -92,12 +92,8 @@ namespace bts { namespace blockchain {
          chain_database();
          virtual ~chain_database()override;
 
-         /**
-          * @brief open Open the databases, reindexing as necessary
-          * @param reindex_status_callback Called for each reindexed block, with the count of blocks reindexed so far
-          */
-         void open(const fc::path& data_dir, fc::optional<fc::path> genesis_file,
-                   std::function<void(float)> reindex_status_callback = std::function<void(float)>());
+         void open( const fc::path& data_dir, const fc::optional<fc::path>& genesis_file, const bool statistics_enabled,
+                    const std::function<void(float)> replay_status_callback = std::function<void(float)>() );
          void close();
 
          void add_observer( chain_observer* observer );
@@ -109,13 +105,6 @@ namespace bts { namespace blockchain {
          void sanity_check()const;
 
          double get_average_delegate_participation()const;
-
-         /**
-          *  When evaluating blocks, you only need to validate the delegate signature assuming you
-          *  trust the other delegates to check up on eachother (which everyone should).  This
-          *  should greatly reduce processing time for non-delegate nodes.
-          */
-         void skip_signature_verification( bool state );
 
          /**
           * The state of the blockchain after applying all pending transactions.
@@ -139,17 +128,12 @@ namespace bts { namespace blockchain {
          full_block                  generate_block( const time_point_sec block_timestamp,
                                                      const delegate_config& config = delegate_config() );
 
-         /**
-          *  The chain ID is the hash of the initial_config loaded when the
-          *  database was first created.
-          */
-         virtual digest_type         chain_id()const override;
-
          optional<block_fork_data>   get_block_fork_data( const block_id_type& )const;
          bool                        is_known_block( const block_id_type& id )const;
          bool                        is_included_block( const block_id_type& id )const;
 
          fc::ripemd160               get_current_random_seed()const override;
+
 
          account_record              get_delegate_record_for_signee( const public_key_type& block_signee )const;
          account_record              get_block_signee( const block_id_type& block_id )const;
@@ -163,7 +147,6 @@ namespace bts { namespace blockchain {
 
          optional<time_point_sec>    get_next_producible_block_timestamp( const vector<account_id_type>& delegate_ids )const;
 
-         virtual void                index_transaction( const address& addr, const transaction_id_type& trx_id ) override;
          vector<transaction_record>  fetch_address_transactions( const address& addr );
 
          uint32_t                    get_block_num( const block_id_type& )const;
@@ -187,10 +170,6 @@ namespace bts { namespace blockchain {
          vector<feed_record>         get_feeds_for_asset( const asset_id_type quote_id, const asset_id_type base_id )const;
          vector<feed_record>         get_feeds_from_delegate( const account_id_type delegate_id )const;
 
-         virtual odelegate_slate     get_delegate_slate( slate_id_type id )const override;
-         virtual void                store_delegate_slate( slate_id_type id,
-                                                            const delegate_slate& slate ) override;
-
          virtual otransaction_record get_transaction( const transaction_id_type& trx_id,
                                                       bool exact = true )const override;
 
@@ -201,6 +180,8 @@ namespace bts { namespace blockchain {
          virtual void                store_burn_record( const burn_record& br ) override;
          virtual oburn_record        fetch_burn_record( const burn_record_key& key )const override;
          vector<burn_record>         fetch_burn_records( const string& account_name )const;
+
+         virtual void                       store_feed_record( const feed_record& r ) override;
 
          virtual void                       store_asset_proposal( const proposal_record& r ) override;
          virtual optional<proposal_record>  fetch_asset_proposal( asset_id_type asset_id, proposal_id_type proposal_id )const override;
@@ -216,8 +197,7 @@ namespace bts { namespace blockchain {
          vector<asset_record>                     get_assets( const string& first_symbol,
                                                               uint32_t limit )const;
 
-         std::vector<slot_record> get_delegate_slot_records( const account_id_type delegate_id,
-                                                             int64_t start_block_num, uint32_t count )const;
+         std::vector<slot_record> get_delegate_slot_records( const account_id_type delegate_id, uint32_t limit )const;
 
          std::map<uint32_t, std::vector<fork_record> > get_forks_list()const;
          std::string export_fork_graph( uint32_t start_block = 1, uint32_t end_block = -1, const fc::path& filename = "" )const;
@@ -256,6 +236,7 @@ namespace bts { namespace blockchain {
          vector<market_order>               get_market_shorts( const string& quote_symbol,
                                                                uint32_t limit = uint32_t(-1) );
          vector<market_order>               get_market_covers( const string& quote_symbol,
+                                                               const string& base_symbol = BTS_BLOCKCHAIN_SYMBOL,
                                                                uint32_t limit = uint32_t(-1) );
 
          share_type                         get_asset_collateral( const string& symbol );
@@ -272,13 +253,12 @@ namespace bts { namespace blockchain {
          vector<market_order>               scan_market_orders( std::function<bool( const market_order& )> filter,
                                                                 uint32_t limit = -1, order_type_enum type = null_order )const;
 
-         void                               scan_unordered_accounts( function<void( const account_record& )> )const;
-         void                               scan_ordered_accounts( function<void( const account_record& )> )const;
-         void                               scan_unordered_assets( function<void( const asset_record& )> )const;
-         void                               scan_ordered_assets( function<void( const asset_record& )> )const;
-         void                               scan_balances( function<void( const balance_record& )> callback,
-                                                           bool include_empty )const;
-         void                               scan_objects( function<void( const object_record& )> callback )const;
+         void                               scan_unordered_accounts( const function<void( const account_record& )> )const;
+         void                               scan_ordered_accounts( const function<void( const account_record& )> )const;
+         void                               scan_unordered_assets( const function<void( const asset_record& )> )const;
+         void                               scan_ordered_assets( const function<void( const asset_record& )> )const;
+         void                               scan_balances( const function<void( const balance_record& )> callback )const;
+         void                               scan_objects( const function<void( const object_record& )> callback )const;
 
          virtual optional<variant>          get_property( chain_property_enum property_id )const override;
          virtual void                       set_property( chain_property_enum property_id,
@@ -287,20 +267,9 @@ namespace bts { namespace blockchain {
          bool                               is_valid_symbol( const string& asset_symbol )const;
          string                             get_asset_symbol( const asset_id_type asset_id )const;
          asset_id_type                      get_asset_id( const string& asset_symbol )const;
-         virtual oasset_record              get_asset_record( const asset_id_type id )const override;
-         virtual obalance_record            get_balance_record( const balance_id_type& id )const override;
-         virtual oaccount_record            get_account_record( const account_id_type id )const override;
-         virtual oaccount_record            get_account_record( const address& owner )const override;
 
-         virtual oasset_record              get_asset_record( const string& symbol )const override;
-         virtual oaccount_record            get_account_record( const string& name )const override;
-
-         virtual void                       store_asset_record( const asset_record& r )override;
-         virtual void                       store_balance_record( const balance_record& r )override;
-         virtual void                       store_account_record( const account_record& r )override;
-
-         virtual vector<operation>          get_recent_operations( operation_type_enum t )override;
-         virtual void                       store_recent_operation( const operation& o )override;
+         virtual vector<operation>          get_recent_operations( operation_type_enum t )const;
+         virtual void                       store_recent_operation( const operation& o );
 
          virtual void                       store_object_record( const object_record& obj )override;
          virtual oobject_record             get_object_record( const object_id_type id )const override;
@@ -337,9 +306,6 @@ namespace bts { namespace blockchain {
          virtual void                       store_short_record( const market_index_key& key, const order_record& ) override;
          virtual void                       store_collateral_record( const market_index_key& key, const collateral_record& ) override;
 
-         virtual void                       store_slot_record( const slot_record& r )override;
-         virtual oslot_record               get_slot_record( const time_point_sec start_time )const override;
-
          virtual omarket_status             get_market_status( const asset_id_type quote_id, const asset_id_type base_id )override;
          virtual void                       store_market_status( const market_status& s ) override;
          virtual void                       store_market_history_record( const market_history_key &key, const market_history_record &record ) override;
@@ -361,9 +327,6 @@ namespace bts { namespace blockchain {
                                                                   uint32_t limit,
                                                                   const address& owner );
 
-         virtual void                       set_feed( const feed_record& )override;
-         virtual ofeed_record               get_feed( const feed_index )const override;
-
          void                               generate_snapshot( const fc::path& filename )const;
          asset                              calculate_supply( const asset_id_type asset_id )const;
          asset                              calculate_debt( const asset_id_type asset_id, bool include_interest = false )const;
@@ -372,13 +335,14 @@ namespace bts { namespace blockchain {
          void                               dump_state( const fc::path& path )const;
          fc::variant_object                 get_stats() const;
 
-         // TODO: Only call on pending chain state
+         // XXX: Only call on pending chain state
          virtual void                       set_market_dirty( const asset_id_type quote_id, const asset_id_type base_id )override
          {
              FC_ASSERT( false, "this shouldn't be called directly" );
          }
 
-         void track_chain_statistics( bool status = true );
+         // Applies only when pushing new blocks; gets enabled in delegate loop
+         bool                               _verify_transaction_signatures = false;
 
       private:
          unique_ptr<detail::chain_database_impl> my;
@@ -387,7 +351,9 @@ namespace bts { namespace blockchain {
          virtual void init_asset_db_interface()override;
          virtual void init_balance_db_interface()override;
          virtual void init_transaction_db_interface()override;
+         virtual void init_slate_db_interface()override;
          virtual void init_feed_db_interface()override;
+         virtual void init_slot_db_interface()override;
    };
 
    typedef shared_ptr<chain_database> chain_database_ptr;

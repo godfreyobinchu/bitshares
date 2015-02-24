@@ -410,11 +410,15 @@ string pretty_block_list( const vector<block_record>& block_records, cptr client
             out << std::setw(  8 ) << "MISSED";
             out << std::setw( 20 ) << pretty_timestamp( last_block_timestamp );
 
+            string delegate_name = "?";
             const auto slot_record = client->get_chain()->get_slot_record( last_block_timestamp );
-            FC_ASSERT( slot_record.valid() );
-            const auto delegate_record = client->get_chain()->get_account_record( slot_record->block_producer_id );
-            FC_ASSERT( delegate_record.valid() && delegate_record->is_delegate() );
-            out << std::setw( 32 ) << pretty_shorten( delegate_record->name, 31 );
+            if( slot_record.valid() )
+            {
+                const auto delegate_record = client->get_chain()->get_account_record( slot_record->index.delegate_id );
+                if( delegate_record.valid() && delegate_record->is_delegate() )
+                    delegate_name = delegate_record->name;
+            }
+            out << std::setw( 32 ) << pretty_shorten( delegate_name, 31 );
 
             out << std::setw(  8 ) << "N/A";
             out << std::setw(  8 ) << "N/A";
@@ -559,7 +563,7 @@ string pretty_transaction_list( const vector<pretty_transaction>& transactions, 
                 out << std::setw( 8 );
                 string str;
                 if( transaction.is_virtual )
-                  str = "[" + string(transaction.trx_id).substr(0, 6) + "]";
+                  str = "VIRTUAL";
                 else
                   str = string(transaction.trx_id).substr(0, 8);
                 if( FILTER_OUTPUT_FOR_TESTS )
@@ -908,7 +912,7 @@ string pretty_vote_summary( const account_vote_summary_type& votes, cptr client 
 
         out << std::setw( 32 ) << pretty_shorten( delegate_name, 31 );
         out << std::setw( 24 ) << client->get_chain()->to_pretty_asset( asset( votes_for ) );
-        out << std::setw(  8 ) << client->get_wallet()->get_account_approval( delegate_name );
+        out << std::setw(  8 ) << std::to_string( client->get_wallet()->get_account_approval( delegate_name ) );
 
         out << "\n";
     }
@@ -930,7 +934,10 @@ string pretty_order_list( const vector<std::pair<order_id_type, market_order>>& 
     out << std::setw( 20 ) << "BALANCE";
     out << std::setw( 20 ) << "COST";
     out << std::setw( 20 ) << "COLLATERAL";
+    out << std::setw( 20 ) << "LIMIT";
     out << std::setw( 40 ) << "ID";
+    out << "   ";
+    out << std::setw( 20 ) << "OWNER";
     out << "\n";
 
     out << pretty_line( 162 );
@@ -952,14 +959,21 @@ string pretty_order_list( const vector<std::pair<order_id_type, market_order>>& 
 
         out << std::setw( 20 ) << variant( order.type ).as_string();
         out << std::setw( 20 ) << client->get_chain()->to_pretty_asset( order.get_quantity( feed_price ) );
-        out << std::setw( 30 ) << client->get_chain()->to_pretty_price( order.get_price( feed_price ) );
+        if( order.type == relative_ask_order || order.type == relative_bid_order )
+           out << std::setw( 30 ) << (client->get_chain()->to_pretty_price( feed_price ) + "*" + order.get_price().ratio_string());
+        else
+           out << std::setw( 30 ) << client->get_chain()->to_pretty_price( order.get_price( feed_price ) );
         out << std::setw( 20 ) << client->get_chain()->to_pretty_asset( order.get_balance() );
         out << std::setw( 20 ) << client->get_chain()->to_pretty_asset( order.get_quantity( feed_price ) * order.get_price( feed_price ) );
         if( order.type != cover_order )
            out << std::setw( 20 ) << "N/A";
         else
            out << std::setw( 20 ) << client->get_chain()->to_pretty_asset( asset( *order.collateral ) );
+
+        out << std::setw( 20 ) << (order.get_limit_price() ? client->get_chain()->to_pretty_price( *order.get_limit_price() ) : "NONE");
         out << std::setw( 40 ) << string( id );
+        out << "   ";
+        out << std::setw( 20 ) << string( order.get_owner() );
 
         out << "\n";
     }

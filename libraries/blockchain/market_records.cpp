@@ -1,3 +1,4 @@
+#include <bts/blockchain/exceptions.hpp>
 #include <bts/blockchain/market_records.hpp>
 #include <fc/exception/exception.hpp>
 #include <fc/reflect/variant.hpp>
@@ -56,7 +57,7 @@ price market_order::get_price( const price& relative )const
       {
          price abs_price;
          if( relative != price() )
-            abs_price = market_index.order_price + relative;
+            abs_price = market_index.order_price * relative;
          else
             abs_price = market_index.order_price;
          if( state.limit_price )
@@ -67,7 +68,7 @@ price market_order::get_price( const price& relative )const
       {
          price abs_price;
          if( relative != price() )
-            abs_price = market_index.order_price + relative;
+            abs_price = market_index.order_price * relative;
          else
             abs_price = market_index.order_price;
          if( state.limit_price )
@@ -88,7 +89,20 @@ price market_order::get_price( const price& relative )const
         FC_ASSERT( false, "Null Order" );
    }
    FC_ASSERT( false, "Should not reach this line" );
-} FC_CAPTURE_AND_RETHROW( (*this)(relative) ) }
+}
+catch( const bts::blockchain::price_multiplication_undefined& )
+{
+    return price();
+}
+catch( const bts::blockchain::price_multiplication_overflow& )
+{
+    return price();
+}
+catch( const bts::blockchain::price_multiplication_underflow& )
+{
+    return price();
+}
+FC_CAPTURE_AND_RETHROW( (*this)(relative) ) }
 
 price market_order::get_highest_cover_price()const
 { try {
@@ -116,7 +130,7 @@ asset market_order::get_quantity( const price& relative )const
      }
      case cover_order:
      {
-        return asset( (*collateral * 3)/4 );
+        return asset( (*collateral * BTS_BLOCKCHAIN_MCALL_D2C_NUMERATOR) / BTS_BLOCKCHAIN_MCALL_D2C_DENOMINATOR );
      }
      default:
         FC_ASSERT( false, "Not Implemented" );

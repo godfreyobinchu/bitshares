@@ -5,31 +5,11 @@
 
 namespace bts { namespace blockchain { namespace detail {
 
-  market_engine::market_engine( pending_chain_state_ptr ps, chain_database_impl& cdi )
+  market_engine::market_engine( const pending_chain_state_ptr ps, const chain_database_impl& cdi )
   :_pending_state(ps),_db_impl(cdi)
   {
       _pending_state = std::make_shared<pending_chain_state>( ps );
       _prior_state = ps;
-  }
-
-  void market_engine::cancel_all_shorts()
-  {
-      for( auto short_itr = _db_impl._short_db.begin(); short_itr.valid(); ++short_itr )
-      {
-          const market_index_key market_idx = short_itr.key();
-          const order_record order_rec = short_itr.value();
-          _current_bid = market_order( short_order, market_idx, order_rec );
-
-          // Initialize the market transaction
-          market_transaction mtrx;
-          mtrx.bid_owner = _current_bid->get_owner();
-          mtrx.bid_type = short_order;
-
-          cancel_current_short( mtrx, market_idx.order_price.quote_asset_id );
-          push_market_transaction( mtrx );
-      }
-
-      _pending_state->apply_changes();
   }
 
   bool market_engine::execute( asset_id_type quote_id, asset_id_type base_id, const fc::time_point_sec timestamp )
@@ -46,6 +26,9 @@ namespace bts { namespace blockchain { namespace detail {
           FC_ASSERT( !quote_asset->is_market_frozen() );
           FC_ASSERT( !base_asset->is_market_frozen() );
 
+          FC_ASSERT( !_pending_state->is_fraudulent_asset( *quote_asset ) );
+          FC_ASSERT( !_pending_state->is_fraudulent_asset( *base_asset ) );
+
           // The order book is sorted from low to high price. So to get the last item (highest bid),
           // we need to go to the first item in the next market class and then back up one
           const price next_pair = (base_id+1 == quote_id) ? price( 0, quote_id+1, 0 ) : price( 0, quote_id, base_id+1 );
@@ -53,14 +36,14 @@ namespace bts { namespace blockchain { namespace detail {
           _ask_itr           = _db_impl._ask_db.lower_bound( market_index_key( price( 0, quote_id, base_id) ) );
           _relative_bid_itr  = _db_impl._relative_bid_db.lower_bound( market_index_key( next_pair ) );
           _relative_ask_itr  = _db_impl._relative_ask_db.lower_bound( market_index_key( price( 0, quote_id, base_id) ) );
-          _short_itr         = _db_impl._short_db.lower_bound( market_index_key( next_pair ) );
+          _short_itr         = _db_impl._short_db.lower_bound( market_index_key_ext( next_pair ) );
           _collateral_itr    = _db_impl._collateral_db.lower_bound( market_index_key( next_pair ) );
 
           _collateral_expiration_itr  = _db_impl._collateral_expiration_index.lower_bound( { quote_id, time_point(), market_index_key( price(0,quote_id,base_id) ) } );
 
           int last_orders_filled = -1;
           asset trading_volume(0, base_id);
-          price opening_price, closing_price;
+          price opening_price, closing_price, highest_price, lowest_price;
 
           if( !_ask_itr.valid() ) _ask_itr = _db_impl._ask_db.begin();
           if( !_relative_ask_itr.valid() ) _relative_ask_itr = _db_impl._relative_ask_db.begin();
@@ -80,7 +63,7 @@ namespace bts { namespace blockchain { namespace detail {
           // Market issued assets cannot match until the first time there is a median feed; assume feed price base id 0
           if( quote_asset->is_market_issued() && base_asset->id == 0 )
           {
-              _feed_price = _db_impl.self->get_active_feed_price( _quote_id );
+              _feed_price = _db_impl.self->get_active_feed_price( _quote_id, _base_id );
               const omarket_status market_stat = _pending_state->get_market_status( _quote_id, _base_id );
               if( (!market_stat.valid() || !market_stat->last_valid_feed_price.valid()) && !_feed_price.valid() )
                   FC_CAPTURE_AND_THROW( insufficient_feeds, (quote_id)(base_id) );
@@ -114,6 +97,8 @@ namespace bts { namespace blockchain { namespace detail {
             mtrx.bid_type  = _current_bid->type;
             mtrx.ask_type  = _current_ask->type;
 
+            wdump( (mtrx) );
+
             if( _current_bid->type == short_order )
             {
                 FC_ASSERT( quote_asset->is_market_issued() );
@@ -122,7 +107,7 @@ namespace bts { namespace blockchain { namespace detail {
                 // Always execute shorts at the feed price
                 mtrx.bid_price = *_feed_price;
 
-                // Skip shorts that are over the price limit.
+                // Skip shorts that are over the price limit
                 if( _current_bid->state.limit_price.valid() )
                 {
                   if( *_current_bid->state.limit_price < mtrx.ask_price )
@@ -136,8 +121,10 @@ namespace bts { namespace blockchain { namespace detail {
             {
                 if( _current_bid->state.limit_price.valid() )
                 {
-                  if( *_current_bid->state.limit_price < mtrx.ask_price )
+                  if( *_current_bid->state.limit_price <= mtrx.bid_price )
                   {
+                      cancel_current_relative_bid( mtrx );
+                      push_market_transaction( mtrx );
                       _current_bid.reset(); continue;
                   }
                 }
@@ -146,8 +133,10 @@ namespace bts { namespace blockchain { namespace detail {
             {
                 if( _current_ask->state.limit_price.valid() )
                 {
-                  if( *_current_ask->state.limit_price > mtrx.ask_price )
+                  if( *_current_ask->state.limit_price >= mtrx.ask_price )
                   {
+                      cancel_current_relative_ask( mtrx );
+                      push_market_transaction( mtrx );
                       _current_ask.reset(); continue;
                   }
                 }
@@ -169,13 +158,31 @@ namespace bts { namespace blockchain { namespace detail {
                 {
                    _current_ask.reset(); continue;
                 }
+                /**
+                 *  Protect expired cover orders from over-paying to exit their position.  If there are no bids at
+                 *  or above the price feed then the expired cover creates a buy wall at the price feed.  No
+                 *  need to punish them.
+                 */
+                if( _current_collat_record.expiration < _pending_state->now() && mtrx.bid_price < *_feed_price )
+                {
+                   /** make sure that expired *AND* margin called orders don't get skipped */
+                  
+                   // if the call price < feed price then no margin call has occurred yet
+                   // so we can skip it.
+                   if( _current_ask->get_price() < *_feed_price )
+                      _current_ask.reset(); continue;
+                }
                 //This is a forced cover. He's gonna sell at whatever price a buyer wants. No choice.
                 mtrx.ask_price = mtrx.bid_price;
             }
             // get_next_ask() will return all covers first after checking expiration... which means
             // if it is not a cover then we can stop matching orders as soon as there exists a spread
             //// The ask price hasn't been reached
-            else if( mtrx.bid_price < mtrx.ask_price ) break;
+            else if( mtrx.bid_price < mtrx.ask_price )
+            {
+               wlog( "bid_price ${b} < ask_price ${a}; exit market loop", ("b",mtrx.bid_price)("a",mtrx.ask_price) );
+               break;
+            }
 
             if( _current_ask->type == cover_order && _current_bid->type == short_order )
             {
@@ -185,6 +192,15 @@ namespace bts { namespace blockchain { namespace detail {
                 const asset max_usd_cover_can_afford = cover_collateral * mtrx.bid_price;
                 const asset cover_debt               = get_current_cover_debt();
                 const asset usd_for_short_sale       = _current_bid->get_balance() * collateral_rate; //_current_bid->get_quote_quantity();
+
+                const price liquidation_price = cover_debt / cover_collateral;
+
+                if( liquidation_price > *_feed_price )
+                {
+                    handle_liquidation( liquidation_price );
+                    break;
+                }
+
 
                 //Actual quote to purchase is the minimum of what's for sale, what can I possibly buy, and what I owe
                 const asset usd_exchanged = std::min( {usd_for_short_sale, max_usd_cover_can_afford, cover_debt} );
@@ -219,6 +235,15 @@ namespace bts { namespace blockchain { namespace detail {
                 const asset cover_debt                = get_current_cover_debt();
                 const asset usd_for_sale              = _current_bid->get_balance();
 
+                const price liquidation_price = cover_debt / cover_collateral;
+
+                if( liquidation_price > *_feed_price )
+                {
+                    handle_liquidation( liquidation_price );
+                    break;
+                }
+
+
                 asset usd_exchanged = std::min( {usd_for_sale, max_usd_cover_can_afford, cover_debt} );
 
                 mtrx.ask_received = usd_exchanged;
@@ -233,18 +258,22 @@ namespace bts { namespace blockchain { namespace detail {
                 mtrx.bid_received = mtrx.ask_paid;
                 mtrx.bid_paid     = mtrx.ask_received;
 
-                pay_current_bid( mtrx, *quote_asset );
+                pay_current_bid( mtrx, *base_asset, *quote_asset );
                 pay_current_cover( mtrx, *quote_asset );
             }
-            else if( (_current_ask->type == ask_order || _current_ask->type == relative_bid_order) &&
+            else if( (_current_ask->type == ask_order || _current_ask->type == relative_ask_order)  &&
                      _current_bid->type == short_order )
             {
+                FC_ASSERT( _feed_price.valid() );
+
                 // Bound collateral ratio (maximizes collateral of new margin position)
                 price collateral_rate          = *_feed_price; // Asserted valid above
                 collateral_rate.ratio          /= 2; // 2x from short, 1 x from long == 3x default collateral
-                const asset ask_quantity_usd   = _current_ask->get_quote_quantity();
+                const asset ask_quantity_usd   = _current_ask->get_quote_quantity(*_feed_price);
                 const asset short_quantity_usd = _current_bid->get_balance() * collateral_rate;
                 const asset usd_exchanged      = std::min( short_quantity_usd, ask_quantity_usd );
+
+                wdump( (ask_quantity_usd)(short_quantity_usd)(usd_exchanged) );
 
                 mtrx.ask_received   = usd_exchanged;
 
@@ -264,14 +293,15 @@ namespace bts { namespace blockchain { namespace detail {
                 mtrx.bid_paid       = mtrx.ask_received;
 
                 pay_current_short( mtrx, *quote_asset, *base_asset );
-                pay_current_ask( mtrx, *quote_asset );
+                pay_current_ask( mtrx, *base_asset, *quote_asset );
             }
             else if( (_current_ask->type == ask_order || _current_ask->type == relative_ask_order) &&
                      (_current_bid->type == bid_order || _current_bid->type == relative_bid_order ) )
             {
-                const asset bid_quantity_xts = _current_bid->get_quantity();
-                const asset ask_quantity_xts = _current_ask->get_quantity();
+                const asset bid_quantity_xts = _current_bid->get_quantity( _feed_price ? *_feed_price : price() );
+                const asset ask_quantity_xts = _current_ask->get_quantity( _feed_price ? *_feed_price : price() );
                 const asset quantity_xts = std::min( bid_quantity_xts, ask_quantity_xts );
+                wdump( (bid_quantity_xts)(ask_quantity_xts)(quantity_xts) );
 
                 // Everyone gets the price they asked for
                 mtrx.ask_received   = quantity_xts * mtrx.ask_price;
@@ -280,6 +310,8 @@ namespace bts { namespace blockchain { namespace detail {
                 mtrx.ask_paid       = quantity_xts;
                 mtrx.bid_received   = quantity_xts;
 
+                wdump((mtrx));
+
                 // Handle rounding errors
                 if( quantity_xts == bid_quantity_xts )
                    mtrx.bid_paid = _current_bid->get_balance();
@@ -287,10 +319,12 @@ namespace bts { namespace blockchain { namespace detail {
                 if( quantity_xts == ask_quantity_xts )
                    mtrx.ask_paid = _current_ask->get_balance();
 
+                wdump((mtrx));
+
                 mtrx.fees_collected = mtrx.bid_paid - mtrx.ask_received;
 
-                pay_current_bid( mtrx, *quote_asset );
-                pay_current_ask( mtrx, *base_asset );
+                pay_current_bid( mtrx, *base_asset, *quote_asset );
+                pay_current_ask( mtrx, *base_asset, *quote_asset );
             }
 
             push_market_transaction( mtrx );
@@ -302,6 +336,13 @@ namespace bts { namespace blockchain { namespace detail {
             if( opening_price == price() )
               opening_price = mtrx.bid_price;
             closing_price = mtrx.bid_price;
+            // Remark: only prices of matched orders be updated to market history
+            // TODO check here: since the orders have been sorted, maybe don't need the 2nd comparison
+            if( highest_price == price() || highest_price < mtrx.bid_price)
+              highest_price = mtrx.bid_price;
+            // TODO check here: store lowest ask price or lowest bid price?
+            if( lowest_price == price() || lowest_price > mtrx.ask_price)
+              lowest_price = mtrx.ask_price;
 
             if( mtrx.fees_collected.asset_id == base_asset->id )
                 base_asset->collected_fees += mtrx.fees_collected.amount;
@@ -321,7 +362,8 @@ namespace bts { namespace blockchain { namespace detail {
               market_stat->last_error.reset();
               _pending_state->store_market_status( *market_stat );
 
-              update_market_history( trading_volume, opening_price, closing_price, timestamp );
+              // Remark: only prices of matched orders be updated to market history
+              update_market_history( trading_volume, highest_price, lowest_price, opening_price, closing_price, timestamp );
           }
 
           wlog( "done matching orders" );
@@ -335,6 +377,10 @@ namespace bts { namespace blockchain { namespace detail {
         wlog( "error executing market ${quote} / ${base}\n ${e}", ("quote",quote_id)("base",base_id)("e",e.to_detail_string()) );
         omarket_status market_stat = _prior_state->get_market_status( _quote_id, _base_id );
         if( !market_stat.valid() ) market_stat = market_status( _quote_id, _base_id );
+        if( !(_feed_price == market_stat->current_feed_price) )
+        {
+           // TODO: update shorts at feed 
+        }
         market_stat->update_feed_price( _feed_price );
         market_stat->last_error = e;
         _prior_state->store_market_status( *market_stat );
@@ -362,6 +408,56 @@ namespace bts { namespace blockchain { namespace detail {
       wlog( "${trx}", ("trx", fc::json::to_pretty_string( mtrx ) ) );
 
       _market_transactions.push_back(mtrx);
+  } FC_CAPTURE_AND_RETHROW( (mtrx) ) }
+
+  void market_engine::cancel_current_relative_bid( market_transaction& mtrx )
+  { try {
+     FC_ASSERT( _current_bid->type == relative_bid_order );
+     FC_ASSERT( mtrx.bid_type == relative_bid_order );
+     mtrx.ask_received = asset();
+     mtrx.ask_paid = asset();
+     mtrx.ask_owner = address();
+     mtrx.bid_received = _current_bid->get_balance();
+     mtrx.bid_paid = mtrx.bid_received;
+
+     const balance_id_type id = withdraw_condition( withdraw_with_signature( mtrx.bid_owner ), mtrx.bid_received.asset_id ).get_address();
+     obalance_record bid_payout = _pending_state->get_balance_record( id );
+     if( !bid_payout.valid() )
+       bid_payout = balance_record( mtrx.bid_owner, asset(0,mtrx.bid_received.asset_id), 0 );
+
+     bid_payout->balance += mtrx.bid_received.amount;
+     bid_payout->last_update = _pending_state->now();
+     bid_payout->deposit_date = _pending_state->now();
+     _pending_state->store_balance_record( *bid_payout );
+
+     _current_bid->state.balance = 0;
+     _pending_state->store_relative_bid_record( _current_bid->market_index, _current_bid->state );
+
+  } FC_CAPTURE_AND_RETHROW( (mtrx) ) }
+
+  void market_engine::cancel_current_relative_ask( market_transaction& mtrx )
+  { try {
+     FC_ASSERT( _current_ask->type == relative_ask_order );
+     FC_ASSERT( mtrx.ask_type == relative_ask_order );
+     mtrx.bid_received = asset();
+     mtrx.bid_paid = asset();
+     mtrx.bid_owner = address();
+     mtrx.ask_received = _current_ask->get_balance();
+     mtrx.ask_paid = mtrx.ask_received;
+
+     const balance_id_type id = withdraw_condition( withdraw_with_signature( mtrx.ask_owner ), mtrx.ask_received.asset_id ).get_address();
+     obalance_record ask_payout = _pending_state->get_balance_record( id );
+     if( !ask_payout.valid() )
+       ask_payout = balance_record( mtrx.ask_owner, asset(0,mtrx.ask_received.asset_id), 0 );
+
+     ask_payout->balance += mtrx.ask_received.amount;
+     ask_payout->last_update = _pending_state->now();
+     ask_payout->deposit_date = _pending_state->now();
+     _pending_state->store_balance_record( *ask_payout );
+
+     _current_ask->state.balance = 0;
+     _pending_state->store_relative_ask_record( _current_ask->market_index, _current_ask->state );
+
   } FC_CAPTURE_AND_RETHROW( (mtrx) ) }
 
   void market_engine::cancel_current_short( market_transaction& mtrx, const asset_id_type quote_asset_id )
@@ -419,13 +515,9 @@ namespace bts { namespace blockchain { namespace detail {
       }
 
       auto call_collateral = collateral;
-      call_collateral.amount *= 2;
-      call_collateral.amount /= 3;
-      //auto cover_price = mtrx.bid_price;
+      call_collateral.amount *= BTS_BLOCKCHAIN_MCALL_D2C_NUMERATOR;
+      call_collateral.amount /= BTS_BLOCKCHAIN_MCALL_D2C_DENOMINATOR;
       auto cover_price = mtrx.bid_paid / call_collateral;
-      //cover_price.ratio *= 2;
-      //cover_price.ratio /= 3;
-      // auto cover_price = mtrx.bid_paid / asset( (3*collateral.amount)/4, _base_id );
 
       market_index_key cover_index( cover_price, _current_bid->get_owner() );
       auto ocover_record = _pending_state->get_collateral_record( cover_index );
@@ -451,7 +543,7 @@ namespace bts { namespace blockchain { namespace detail {
       _pending_state->store_short_record( _current_bid->market_index, _current_bid->state );
   } FC_CAPTURE_AND_RETHROW( (mtrx)  ) }
 
-  void market_engine::pay_current_bid( const market_transaction& mtrx, asset_record& quote_asset )
+  void market_engine::pay_current_bid( const market_transaction& mtrx, asset_record& base_asset, asset_record& quote_asset )
   { try {
       FC_ASSERT( _current_bid->type == bid_order || _current_bid->type == relative_bid_order);
       FC_ASSERT( mtrx.bid_type == bid_order || mtrx.bid_type == relative_bid_order );
@@ -464,7 +556,15 @@ namespace bts { namespace blockchain { namespace detail {
       if( !bid_payout )
           bid_payout = balance_record( mtrx.bid_owner, asset(0,_base_id), 0 );
 
-      bid_payout->balance += mtrx.bid_received.amount;
+      uint64_t issuer_fee = 0;
+      if( base_asset.market_fee && base_asset.market_fee <= BTS_BLOCKCHAIN_MAX_UIA_MARKET_FEE )
+      {
+         uint64_t issuer_fee = mtrx.bid_received.amount * quote_asset.market_fee;
+         issuer_fee /= BTS_BLOCKCHAIN_MAX_UIA_MARKET_FEE;
+         base_asset.collected_fees += issuer_fee;
+      }
+
+      bid_payout->balance += mtrx.bid_received.amount - issuer_fee;
       bid_payout->last_update = _pending_state->now();
       bid_payout->deposit_date = _pending_state->now();
       _pending_state->store_balance_record( *bid_payout );
@@ -538,19 +638,6 @@ namespace bts { namespace blockchain { namespace detail {
 
             auto left_over_collateral = (*_current_ask->collateral);
 
-            if( _current_collat_record.expiration > _pending_state->now() )
-            {
-               /** charge 5% fee for having a margin call */
-               auto fee = (left_over_collateral * 5000 )/100000;
-               left_over_collateral -= fee;
-               // when executing a cover order, it always takes the exact price of the
-               // highest bid, so there should be no fees paid *except* this.
-               FC_ASSERT( mtrx.fees_collected.amount == 0 );
-
-               // these go to the network... as dividends..
-               mtrx.fees_collected += asset( fee, _base_id );
-            }
-
             ask_payout->balance += left_over_collateral;
             ask_payout->last_update = _pending_state->now();
             ask_payout->deposit_date = _pending_state->now();
@@ -567,19 +654,31 @@ namespace bts { namespace blockchain { namespace detail {
                                                _current_collat_record );
   } FC_CAPTURE_AND_RETHROW( (mtrx) ) }
 
-  void market_engine::pay_current_ask( const market_transaction& mtrx, asset_record& base_asset )
+  void market_engine::pay_current_ask( const market_transaction& mtrx, asset_record& base_asset, 
+                                                                       asset_record& quote_asset )
   { try {
       FC_ASSERT( _current_ask->type == ask_order || _current_ask->type == relative_ask_order );
       FC_ASSERT( mtrx.ask_type == ask_order || mtrx.ask_type == relative_ask_order );
 
+      wdump( (_current_ask->state.balance)(mtrx.ask_paid.amount) );
       _current_ask->state.balance -= mtrx.ask_paid.amount;
-      FC_ASSERT( _current_ask->state.balance >= 0 );
+      FC_ASSERT( _current_ask->state.balance >= 0, "balance: ${b}", ("b",_current_ask->state.balance) );
 
       auto ask_balance_address = withdraw_condition( withdraw_with_signature(mtrx.ask_owner), _quote_id ).get_address();
       auto ask_payout = _pending_state->get_balance_record( ask_balance_address );
       if( !ask_payout )
           ask_payout = balance_record( mtrx.ask_owner, asset(0,_quote_id), 0 );
-      ask_payout->balance += mtrx.ask_received.amount;
+
+      uint64_t issuer_fee = 0;
+      if( quote_asset.market_fee && quote_asset.market_fee <= BTS_BLOCKCHAIN_MAX_UIA_MARKET_FEE )
+      {
+         uint64_t issuer_fee = mtrx.ask_received.amount * quote_asset.market_fee;
+         issuer_fee /= BTS_BLOCKCHAIN_MAX_UIA_MARKET_FEE;
+         quote_asset.collected_fees += issuer_fee;
+      }
+
+
+      ask_payout->balance += mtrx.ask_received.amount - issuer_fee;
       ask_payout->last_update = _pending_state->now();
       ask_payout->deposit_date = _pending_state->now();
 
@@ -598,26 +697,13 @@ namespace bts { namespace blockchain { namespace detail {
 
   } FC_CAPTURE_AND_RETHROW( (mtrx) )  } // pay_current_ask
 
-  bool market_engine::get_next_short()
-  {
-      if( _short_itr.valid() )
-      {
-        auto bid = market_order( short_order,
-                                 _short_itr.key(),
-                                 _short_itr.value(),
-                                 _short_itr.value().balance,
-                                 _short_itr.key().order_price );
-        if( bid.get_price().quote_asset_id == _quote_id &&
-            bid.get_price().base_asset_id == _base_id )
-        {
-            --_short_itr;
-            _current_bid = bid;
-            return _current_bid.valid();
-        }
-      }
-      return false;
-  }
-
+  /**
+   *  if there are bids or relative bids above feed price, take the max of the two
+   *  if there are shorts at the feed take the next short
+   *  if there are bids with prices above the limit of the current short they should take priority
+   *       - shorts need to be ordered by limit first, then interest rate *WHEN* the limit is
+   *         lower than the feed price.   
+   */
   bool market_engine::get_next_bid()
   { try {
       if( _current_bid && _current_bid->get_quantity().amount > 0 )
@@ -632,6 +718,7 @@ namespace bts { namespace blockchain { namespace detail {
          if( _feed_price )
          {
             bid = market_order( relative_bid_order, _relative_bid_itr.key(), _relative_bid_itr.value() );
+            // in case of overflow, underflow, or undefined, the result will be price(), which will fail the following check.
             if( (bid->get_price(*_feed_price).quote_asset_id != _quote_id || bid->get_price(*_feed_price).base_asset_id != _base_id) )
                bid.reset();
          }
@@ -655,23 +742,56 @@ namespace bts { namespace blockchain { namespace detail {
          }
       }
 
+      // We no longer have get_next_short() which was previously
+      //   called here.  Because get_next_short() will (1) get the
+      //   next short and (2) advance the short iterator.  But our
+      //   merge check must happen between steps (1) and (2), and
+      //   step (2) must not happen if the short loses the merge check.
+      //
+      // NB shorts can execute below the feed if the short wall has
+      //   been exhausted, so in the general case shorts may be
+      //   interleaved with bids, even without considering relative
+      //   orders!
+
+      // if we have no feed, no shorts will execute.
+      if( _feed_price && _short_itr.valid() )
+      {
+        market_order short_bid = market_order( short_order,
+                                 _short_itr.key(),
+                                 _short_itr.value(),
+                                 _short_itr.value().balance,
+                                 _short_itr.key().order_price );
+
+        price short_price = short_bid.get_price( *_feed_price );
+
+        if( short_price.quote_asset_id == _quote_id &&
+            short_price.base_asset_id == _base_id )
+        {
+            if( (!bid) || (short_price > bid->get_price( *_feed_price )) )
+               bid = short_bid;
+        }
+      }
 
       if( bid )
       {
-         if( bid->type == relative_bid_order ) // all relative bids take priority over shorts
-         {
-            --_relative_bid_itr;
-         }
-         else
-         {
-            if( _feed_price.valid() && bid->get_price() < *_feed_price && get_next_short() )
-                return _current_bid.valid();
-            --_bid_itr;
-         }
-         _current_bid = bid;
-         return _current_bid.valid();
+          _current_bid = bid;
+          switch( uint8_t(bid->type) )
+          {
+              case bid_order:
+                  --_bid_itr;
+                  break;
+              case relative_bid_order:
+                  --_relative_bid_itr;
+                  break;
+              case short_order:
+                  --_short_itr;
+                  break;
+              default:
+                  // TODO:  Warning or something goes here?
+                  ;
+          }
       }
-      get_next_short();
+
       return _current_bid.valid();
   } FC_CAPTURE_AND_RETHROW() }
 
@@ -715,6 +835,7 @@ namespace bts { namespace blockchain { namespace detail {
 
       /**
        *  Process expired collateral positions.
+       *  Expired margin positions take second priority based upon age
        */
       while( _collateral_expiration_itr != _db_impl._collateral_expiration_index.end() )
       {
@@ -742,21 +863,50 @@ namespace bts { namespace blockchain { namespace detail {
          } // else continue to next item
       }
 
-
       /**
-       *  Expired margin positions take second priority based upon age
+       *  Process normal and relative asks.
        */
+
+      optional<market_order> ask;
+
+      if( _feed_price && _relative_ask_itr.valid() )
+      {
+         ask = market_order( relative_ask_order, _relative_ask_itr.key(), _relative_ask_itr.value() );
+         if( ask->get_price().quote_asset_id != _feed_price->quote_asset_id )
+         {
+            ask.reset();
+            _relative_ask_itr.reset();
+         }
+         // in case of overflow, underflow, or undefined, the result will be price(), which will fail the following check.
+         else if((ask->get_price(*_feed_price).quote_asset_id != _quote_id || ask->get_price(*_feed_price).base_asset_id != _base_id) )
+            ask.reset();
+      }
 
       if( _ask_itr.valid() )
       {
-        const auto ask = market_order( ask_order, _ask_itr.key(), _ask_itr.value() );
-        if( ask.get_price().quote_asset_id == _quote_id &&
-            ask.get_price().base_asset_id == _base_id )
-        {
-            _current_ask = ask;
-        }
-        ++_ask_itr;
+        market_order abs_ask = market_order( ask_order, _ask_itr.key(), _ask_itr.value() );
+        if( (abs_ask.get_price().quote_asset_id == _quote_id && abs_ask.get_price().base_asset_id == _base_id)
+            && ((!ask.valid()) || (abs_ask.get_price() < ask->get_price( *_feed_price))) )
+            ask = abs_ask;
       }
+
+      if( ask )
+      {
+          _current_ask = ask;
+          switch( uint8_t(ask->type) )
+          {
+              case ask_order:
+                  ++_ask_itr;
+                  break;
+              case relative_ask_order:
+                  ++_relative_ask_itr;
+                  break;
+              default:
+                  // TODO:  Warning or something goes here?
+                  ;
+          }
+      }
+
       return _current_ask.valid();
   } FC_CAPTURE_AND_RETHROW() }
 
@@ -766,15 +916,18 @@ namespace bts { namespace blockchain { namespace detail {
     *  is for historical purposes only.
     */
   void market_engine::update_market_history( const asset& trading_volume,
+                                             const price& highest_price,
+                                             const price& lowest_price,
                                              const price& opening_price,
                                              const price& closing_price,
                                              const fc::time_point_sec timestamp )
   {
-          if( trading_volume.amount > 0 && get_next_bid() && get_next_ask() )
+          // Remark: only prices of matched orders be updated to market history
+          if( trading_volume.amount > 0 )
           {
             market_history_key key(_quote_id, _base_id, market_history_key::each_block, _db_impl._head_block_header.timestamp);
-            market_history_record new_record(_current_bid->get_price(),
-                                            _current_ask->get_price(),
+            market_history_record new_record(highest_price,
+                                            lowest_price,
                                             opening_price,
                                             closing_price,
                                             trading_volume.amount);
@@ -789,11 +942,13 @@ namespace bts { namespace blockchain { namespace detail {
             key.timestamp = timestamp;
 
             //Unless the previous record for this market is the same as ours...
+            // TODO check here: the previous commit checks for volume and prices change here, 
+            //                  I replaced them with key comparison, but looks odd as well.
+            //                  maybe need to remove the judgements at all? since volume info is
+            //                  always needed to be updated to market history, 
+            //                  even if prices and volumes are same to last block.
             if( (!(last_key_itr.valid()
-                && last_key_itr.key().quote_id == _quote_id
-                && last_key_itr.key().base_id == _base_id
-                && last_key_itr.key().granularity == market_history_key::each_block
-                && last_key_itr.value() == new_record)) )
+                && last_key_itr.key() == key)) )
             {
               //...add a new entry to the history table.
               _pending_state->market_history[key] = new_record;
@@ -810,8 +965,9 @@ namespace bts { namespace blockchain { namespace detail {
               {
                 old_record.highest_bid = std::max(new_record.highest_bid, old_record.highest_bid);
                 old_record.lowest_ask = std::min(new_record.lowest_ask, old_record.lowest_ask);
-                _pending_state->market_history[old_key] = old_record;
               }
+              // always update old data since volume changed
+              _pending_state->market_history[old_key] = old_record;
             }
             else
               _pending_state->market_history[old_key] = new_record;
@@ -827,8 +983,9 @@ namespace bts { namespace blockchain { namespace detail {
               {
                 old_record.highest_bid = std::max(new_record.highest_bid, old_record.highest_bid);
                 old_record.lowest_ask = std::min(new_record.lowest_ask, old_record.lowest_ask);
-                _pending_state->market_history[old_key] = old_record;
               }
+              // always update old data since volume changed
+              _pending_state->market_history[old_key] = old_record;
             }
             else
               _pending_state->market_history[old_key] = new_record;
@@ -876,5 +1033,38 @@ namespace bts { namespace blockchain { namespace detail {
                                 _current_collat_record.interest_rate,
                                 get_current_cover_age() ) + _current_ask->get_balance();
   }
+
+  void market_engine::handle_liquidation( const price& liqudation_price )
+  {
+     FC_ASSERT( !"Black Swan Detected - Liquidate Market Now" );
+     // Drop / Cancel all market orders that have executed so far
+     // for each USD cover order, subtract liquidation_price*(debt+interest) from collateral and refund balance
+     //    - pay interest to yield fund
+     // calculate the yield per USD owed on all USD balances
+     // for each USD balance record, set to 0 and issue (balance * yield_per_usd) * liquidation_price to owner
+     //   - for escrow transactions convert escrow balance to USD
+     // for each USD pending sell, cancel and issue balance * yield_per_usd * liquidation_price to owner
+  }
+
+  void market_engine::cancel_all_shorts()
+  {
+      for( auto short_itr = _db_impl._short_db.begin(); short_itr.valid(); ++short_itr )
+      {
+          const market_index_key market_idx = short_itr.key();
+          const order_record order_rec = short_itr.value();
+          _current_bid = market_order( short_order, market_idx, order_rec );
+
+          // Initialize the market transaction
+          market_transaction mtrx;
+          mtrx.bid_owner = _current_bid->get_owner();
+          mtrx.bid_type = short_order;
+
+          cancel_current_short( mtrx, market_idx.order_price.quote_asset_id );
+          push_market_transaction( mtrx );
+      }
+
+      _pending_state->apply_changes();
+  }
+
 
 } } } // end namespace bts::blockchain::detail

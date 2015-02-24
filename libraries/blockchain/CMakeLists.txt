@@ -30,14 +30,16 @@ add_library( bts_blockchain
              address.cpp
              pts_address.cpp
              extended_address.cpp
+             transaction_creation_state.cpp
 
              account_record.cpp
              asset_record.cpp
              balance_record.cpp
-             delegate_slate.cpp
              transaction_record.cpp
+             slate_record.cpp
              feed_record.cpp
              market_records.cpp
+             slot_record.cpp
              object_record.cpp
              edge_record.cpp
              site_record.cpp
@@ -51,6 +53,7 @@ add_library( bts_blockchain
              operations.cpp
              account_operations_v1.cpp
              account_operations.cpp
+             slate_operations.cpp
              withdraw_types.cpp
              balance_operations_v1.cpp
              balance_operations_v2.cpp

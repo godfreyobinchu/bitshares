@@ -1,70 +1,144 @@
-import QtQuick 2.4
-import QtQuick.Controls 1.3
+import QtQuick 2.3
 import QtQuick.Window 2.2
 import QtQuick.Layouts 1.1
+import QtQuick.Controls 1.3
+import QtGraphicalEffects 1.0
+
+import Qt.labs.settings 1.0
 
 import "utils.js" as Utils
 import org.BitShares.Types 1.0
 
-ApplicationWindow {
+import Material 0.1
+import Material.ListItems 0.1
+import Material.Extras 0.1 as Extras
+
+Window {
    id: window
    visible: true
-   width: 540
-   height: 960
-   color: visuals.backgroundColor
-   minimumWidth: walletGui.minimumWidth
-   minimumHeight: walletGui.minimumHeight
+   width: units.dp(1200)
+   height: units.dp(1000)
+   Settings {
+      id: persist
 
-   readonly property int orientation: window.width < window.height? Qt.PortraitOrientation : Qt.LandscapeOrientation
+      property alias width: window.width
+      property alias height: window.height
+      property alias x: window.x
+      property alias y: window.y
+      property string guid: Extras.Utils.generateID()
+   }
 
-   function connectToServer() {
-      if( !wallet.connected )
-         wallet.connectToServer("localhost", 6691)
-   }
-   function showError(error) {
-      errorText.text = qsTr("Error: ") + error
-      return d.currentError = d.errorSerial++
-   }
-   function clearError(errorId) {
-      if( d.currentError === errorId )
-         errorText.text = ""
-   }
+   property alias pageStack: __pageStack
+   property alias lockAction: __lockAction
+   property alias payAction: __payAction
 
    Component.onCompleted: {
       if( wallet.walletExists )
          wallet.openWallet()
-      connectToServer()
+      if( !( wallet.accountNames.length && wallet.accounts[wallet.accountNames[0]].isRegistered ) )
+         onboardLoader.sourceComponent = onboardingUi
+      else
+         pageStack.push({item: assetsUi, properties: {accountName: wallet.accountNames[0]}})
+
+      window.connectToServer()
+      checkManifest()
+      lockScreen.focus()
    }
 
-   QtObject {
-      id: d
-      property int errorSerial: 0
-      property int currentError: -1
+   function showError(error, buttonName, buttonCallback) {
+      snack.text = error
+      if( buttonName && buttonCallback ) {
+         snack.buttonText = buttonName
+         snack.onClick.connect(buttonCallback)
+         snack.onDissapear.connect(function() {
+            snack.onClick.disconnect(buttonCallback)
+         })
+      } else
+         snack.buttonText = ""
+      snack.open()
+   }
+   function deviceType() {
+      switch(Device.type) {
+      case Device.phone:
+      case Device.phablet:
+         return "phone"
+      case Device.tablet:
+         return "tablet"
+      case Device.desktop:
+      default:
+         return "computer"
+      }
+   }
+   function format(amount, symbol) {
+      var l = Qt.locale()
+      var rx = new RegExp("(\\" + l.decimalPoint + ")?0*$")
+      return Number(amount).toLocaleString(l, 'f', wallet.getDigitsOfPrecision(symbol)).replace(rx, '')
+   }
+   function connectToServer() {
+      if( !wallet.connected )
+         wallet.connectToServer("nathanhourt.com", 5656, "BTS5LyQycuMEdo6Dxx1XqYp24KV3fVoFKuXJMXTj3x7xJsis3C3EZ")
+   }
+   function checkManifest() {
+      if( AppName === "lw_xts" )
+         return;
+      var version = Qt.application.version
+      var platform = Qt.platform.os
+      if( PlatformName )
+         platform = PlatformName
+      var xhr = new XMLHttpRequest()
+      var url = encodeURI(ManifestUrl + "?uuid="+persist.guid+"&app="+AppName+"&version="+version+"&platform="+platform)
+      xhr.open("GET", url, true)
+      xhr.send()
+   }
+   function openTransferPage(args) {
+      if( wallet.accounts[args.accountName].availableAssets.length )
+         window.pageStack.push({item: transferUi, properties: args})
+      else
+         showError(qsTr("You don't have any assets, so you cannot make a transfer."), qsTr("Refresh Balances"),
+                   wallet.syncAllBalances)
+   }
+   function openOrderForm(args) {
+      if( wallet.accounts[args.accountName].availableAssets.length )
+         window.pageStack.push({item: orderUi, properties: args})
+      else
+         showError(qsTr("You don't have any assets, so you cannot place a market order."), qsTr("Refresh Balances"),
+                   wallet.syncAllBalances)
+   }
+
+   AppTheme {
+      id: theme
+      primaryColor: "#2196F3"
+      backgroundColor: "#BBDEFB"
+      accentColor: "#80D8FF"
+   }
+   Action {
+      id: __lockAction
+      name: qsTr("Lock Wallet")
+      iconName: "action/lock"
+      onTriggered: wallet.lockWallet()
+   }
+   Action {
+      id: __payAction
+      name: qsTr("Send Payment")
+      iconName: "action/payment"
+      onTriggered: openTransferPage({accountName: wallet.accountNames[0]})
    }
    QtObject {
       id: visuals
-
-      property color backgroundColor: "white"
-      property color textColor: "#535353"
-      property color lightTextColor: "#757575"
-      property color buttonColor: "#28A9F6"
-      property color buttonHoverColor: "#2BB4FF"
-      property color buttonPressedColor: "#264D87"
-      property color buttonTextColor: "white"
-      property color errorGlowColor: "red"
-
-      property real spacing: 40
-      property real margins: 20
-
-      property real textBaseSize: window.orientation === Qt.PortraitOrientation?
-                                     window.height * .02 : window.width * .03
+      property real margins: units.dp(16)
    }
    Timer {
-      id: reconnectPoller
-      running: !wallet.connected
-      interval: 5000
+      id: refreshPoller
+      running: wallet.unlocked
+      triggeredOnStart: true
+      interval: 10000
       repeat: true
-      onTriggered: connectToServer()
+      onTriggered: {
+         if( !wallet.connected )
+            connectToServer()
+         else
+            wallet.sync()
+      }
    }
    LightWallet {
       id: wallet
@@ -74,31 +148,221 @@ ApplicationWindow {
       }
 
       onErrorConnecting: {
-         var errorId = showError(error)
-
-         runWhenConnected(function() {
-            clearError(errorId)
-         })
+         showError(error)
       }
+      onNotification: showError(message)
    }
 
-   WalletGui {
-      id: walletGui
+   Item {
+      id: overlayLayer
+      objectName: "overlayLayer"
+
       anchors.fill: parent
+      z: 100
+
+      property Item currentOverlay
+
+      MouseArea {
+         anchors.fill: parent
+         enabled: overlayLayer.currentOverlay != null
+         hoverEnabled: enabled
+         onClicked: overlayLayer.currentOverlay.close()
+      }
+   }
+   LockScreen {
+      id: lockScreen
+      width: window.width
+      height: window.height
+      backgroundColor: Theme.backgroundColor
+      z: 1
+      onPasswordEntered: {
+         if( wallet.unlocked )
+            return proceedIfUnlocked()
+
+         wallet.unlockWallet(password)
+      }
+
+      states: [
+         State {
+            name: "locked"
+            when: !wallet.unlocked
+            PropertyChanges {
+               target: lockScreen
+               x: 0
+            }
+         },
+         State {
+            name: "unlocked"
+            when: wallet.unlocked
+            PropertyChanges {
+               target: lockScreen
+               x: window.width
+            }
+         }
+      ]
+      transitions: [
+         Transition {
+            from: "unlocked"
+            to: "locked"
+            SequentialAnimation {
+               PropertyAnimation {
+                  target: lockScreen
+                  duration: 500
+                  property: "x"
+                  easing.type: Easing.OutBounce
+               }
+               ScriptAction { script: lockScreen.focus() }
+            }
+         },
+         Transition {
+            from: "locked"
+            to: "unlocked"
+            SequentialAnimation {
+               PropertyAnimation {
+                  target: lockScreen
+                  duration: 500
+                  property: "x"
+                  easing.type: Easing.InQuad
+               }
+               ScriptAction { script: lockScreen.clearPassword() }
+            }
+         }
+      ]
    }
 
-   statusBar: StatusBar {
-      RowLayout {
+   Item {
+      id: applicationArea
+      anchors.fill: parent
+      enabled: wallet.unlocked
+      Toolbar {
+         id: toolbar
          width: parent.width
+         backgroundColor: Theme.primaryColor
+      }
+      View {
+         id: criticalNotificationArea
+         y: toolbar.height
+         backgroundColor: "#F44336"
+         height: units.dp(100)
+         width: parent.width
+         enabled: false
+         z: -1
+
+         //Show iff brain key is set, the main page is not active or transitioning out, and we're not already in an onboarding UI
+         property bool active: wallet.brainKey.length > 0
 
          Label {
-            id: statusText
-            text: wallet.connected? qsTr("Connected") : qsTr("Disconnected")
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left:  parent.left
+            anchors.right: criticalNotificationButton.left
+            anchors.margins: visuals.margins
+            text: qsTr("Your wallet has not been backed up. You should back it up as soon as possible.")
+            color: "white"
+            style: "subheading"
+            wrapMode: Text.WrapAtWordBoundaryOrAnywhere
          }
-         Item { Layout.fillWidth: true }
-         Label {
-            id: errorText
+         Button {
+            id: criticalNotificationButton
+            anchors.right: parent.right
+            anchors.rightMargin: visuals.margins
+            anchors.verticalCenter: parent.verticalCenter
+            text: qsTr("Back Up Wallet")
+            textColor: "white"
+
+            onClicked: backupUi.show()
+         }
+
+         states: [
+            State {
+               name: "active"
+               when: criticalNotificationArea.active
+               PropertyChanges {
+                  target: criticalNotificationArea
+                  enabled: true
+               }
+               PropertyChanges {
+                  target: pageStack
+                  anchors.topMargin: criticalNotificationArea.height
+               }
+            }
+         ]
+         transitions: [
+            Transition {
+               from: ""
+               to: "active"
+               reversible: true
+               PropertyAnimation { target: pageStack; property: "anchors.topMargin"; easing.type: Easing.InOutQuad }
+            }
+         ]
+      }
+      PageStack {
+         id: __pageStack
+         anchors {
+            left: parent.left
+            right: parent.right
+            top: toolbar.bottom
+            bottom: parent.bottom
+         }
+
+         onPushed: toolbar.push(page)
+         onPopped: toolbar.pop()
+
+         Component {
+            id: assetsUi
+
+            AssetsLayout {
+               onLockRequested: {
+                  wallet.lockWallet()
+                  uiStack.pop()
+               }
+               onOpenHistory: window.pageStack.push(historyUi, {"accountName": account, "assetSymbol": symbol})
+            }
+         }
+         Component {
+            id: historyUi
+
+            HistoryLayout {
+            }
+         }
+         Component {
+            id: transferUi
+
+            TransferLayout {
+               accountName: wallet.accountNames[0]
+               onTransferComplete: window.pageStack.pop()
+            }
+         }
+         Component {
+            id: orderUi
+
+            OrderForm {
+            }
          }
       }
+   }
+   Component {
+      id: onboardingUi
+
+      OnboardingLayout {
+         onFinished: {
+            pageStack.push({item: assetsUi, properties: {accountName: wallet.accountNames[0]}, immediate: true})
+            onboardLoader.sourceComponent = undefined
+         }
+      }
+   }
+   BackupLayout {
+      id: backupUi
+      minimumWidth: parent.width / 2
+   }
+   Loader {
+      id: onboardLoader
+      z: 2
+   }
+   Snackbar {
+      id: snack
+      duration: 5000
+      enabled: opened
+      onClick: opened = false
+      z: 21
    }
 }

@@ -5,13 +5,13 @@
 #include <QStandardPaths>
 #include <QDir>
 #include <QDebug>
-#include <QQmlListProperty>
 
 #include <bts/light_wallet/light_wallet.hpp>
 
 #include <fc/thread/thread.hpp>
 
 #include "QtWrappers.hpp"
+#include "Account.hpp"
 
 class LightWallet : public QObject
 {
@@ -20,25 +20,24 @@ class LightWallet : public QObject
    Q_PROPERTY(bool connected READ isConnected NOTIFY connectedChanged)
    Q_PROPERTY(bool open READ isOpen NOTIFY openChanged)
    Q_PROPERTY(bool unlocked READ isUnlocked NOTIFY unlockedChanged)
-   Q_PROPERTY(Account* account READ account NOTIFY accountChanged)
+   Q_PROPERTY(QStringList accountNames READ accountNames NOTIFY accountsChanged)
+   Q_PROPERTY(QVariantMap accounts READ accounts NOTIFY accountsChanged)
+   Q_PROPERTY(QStringList allAssets READ allAssets NOTIFY allAssetsChanged)
    Q_PROPERTY(QString connectionError READ connectionError NOTIFY errorConnecting)
    Q_PROPERTY(QString openError READ openError NOTIFY errorOpening)
    Q_PROPERTY(QString unlockError READ unlockError NOTIFY errorUnlocking)
    Q_PROPERTY(QString brainKey READ brainKey NOTIFY brainKeyChanged)
-   Q_PROPERTY(QQmlListProperty<Balance> balances READ balances NOTIFY balancesChanged)
+
+   Q_PROPERTY(qint16 maxMemoSize READ maxMemoSize CONSTANT)
+   Q_PROPERTY(QString baseAssetSymbol READ baseAssetSymbol CONSTANT)
 
 public:
-   LightWallet()
-      : m_walletThread("Wallet Implementation Thread")
-   {
-      auto path = QStandardPaths::writableLocation(QStandardPaths::DataLocation);
-      qDebug() << "Creating data directory:" << path;
-      QDir(path).mkpath(".");
-   }
+   LightWallet();
    virtual ~LightWallet()
    {
       m_walletThread.quit();
-      m_wallet.save();
+      if( walletExists() )
+         m_wallet.save();
    }
 
    bool walletExists() const;
@@ -70,28 +69,66 @@ public:
    {
       return m_brainKey;
    }
-   QQmlListProperty<Balance> balances();
-   Account* account() const
+   qint16 maxMemoSize() const
    {
-      return m_account;
+      return BTS_BLOCKCHAIN_MAX_EXTENDED_MEMO_SIZE;
    }
 
+   Q_INVOKABLE Balance* getFee(QString assetSymbol);
+   Q_INVOKABLE int getDigitsOfPrecision(QString assetSymbol);
+   Q_INVOKABLE bool accountExists(QString name);
+   Q_INVOKABLE bool isValidAccountName(QString name)
+   {
+      return bts::blockchain::chain_database::is_valid_account_name(convert(name));
+   }
+
+   QString baseAssetSymbol() const
+   {
+      return QStringLiteral(BTS_BLOCKCHAIN_SYMBOL);
+   }
+
+   Q_INVOKABLE bool verifyBrainKey(QString key) const;
+
+   QStringList accountNames()
+   {
+      QStringList results;
+      if( !isOpen() )
+         return results;
+      for( auto account : m_wallet.account_records() )
+         results.append(convert(account->name));
+      return results;
+   }
+   QVariantMap accounts() const
+   {
+      return m_accounts;
+   }
+
+   QStringList allAssets();
+
 public Q_SLOTS:
-   void connectToServer( QString host, quint16 port,
-                         QString user = QString("any"),
-                         QString password = QString("none") );
+   void pollForRegistration(QString accountName);
+
+   void connectToServer(QString host, quint16 port,
+                        QString serverKey = QString(),
+                        QString user = QString("any"),
+                        QString password = QString("none"));
    void disconnectFromServer();
 
    void createWallet(QString accountName, QString password);
+   bool recoverWallet(QString accountName, QString password, QString brainKey);
    void openWallet();
    void closeWallet();
 
    void unlockWallet(QString password);
    void lockWallet();
 
-   void registerAccount();
+   void registerAccount(QString accountName);
 
    void clearBrainKey();
+
+   void sync();
+   void syncAllBalances();
+   void syncAllTransactions();
 
 Q_SIGNALS:
    void walletExistsChanged(bool exists);
@@ -103,8 +140,13 @@ Q_SIGNALS:
    void openChanged(bool open);
    void unlockedChanged(bool unlocked);
    void brainKeyChanged(QString key);
-   void balancesChanged(QQmlListProperty<Balance> balances);
-   void accountChanged(Account* arg);
+
+   void synced();
+
+   void notification(QString message);
+
+   void accountsChanged(QVariantMap arg);
+   void allAssetsChanged();
 
 private:
    fc::thread m_walletThread;
@@ -116,8 +158,9 @@ private:
    QString m_openError;
    QString m_unlockError;
    QString m_brainKey;
-   QList<Balance*> m_balanceCache;
-   Account* m_account = nullptr;
+   QVariantMap m_accounts;
+
+   mutable QMap<QString,int> m_digitsOfPrecisionCache;
 
    void generateBrainKey();
    void updateAccount(const bts::light_wallet::account_record& account);

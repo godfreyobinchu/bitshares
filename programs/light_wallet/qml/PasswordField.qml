@@ -1,19 +1,26 @@
-import QtQuick 2.4
+import QtQuick 2.3
 import QtQuick.Controls 1.3
 import QtQuick.Layouts 1.1
 import QtGraphicalEffects 1.0
 
+import Material 0.1
+
 RowLayout {
    id: passwordForm
+   transform: ShakeAnimation {
+      id: shaker
+   }
 
    property alias placeholderText: passwordText.placeholderText
+   property alias floatingLabel: passwordText.floatingLabel
+   property alias helperText: passwordText.helperText
    property alias password: passwordText.text
-   property alias fontPixelSize: passwordText.font.pixelSize
+   property alias fontPixelSize: passwordInput.font.pixelSize
 
    onFocusChanged: if( focus ) passwordText.focus = true
 
-   function errorGlow() {
-      errorGlow.pulse()
+   function shake() {
+      shaker.shake()
    }
 
    signal accepted
@@ -21,9 +28,15 @@ RowLayout {
    TextField {
       id: passwordText
       Layout.fillWidth: true
-      echoMode: button.pressed? TextInput.Normal : TextInput.Password
-      inputMethodHints: Qt.ImhSensitiveData | Qt.ImhHiddenText
-      readOnly: button.pressed
+      Layout.preferredHeight: implicitHeight
+      floatingLabel: true
+      input {
+         id: passwordInput
+         color: "black"
+         echoMode: button.pressed? TextInput.Normal : TextInput.Password
+         inputMethodHints: Qt.ImhSensitiveData | Qt.ImhHiddenText
+         readOnly: button.pressed
+      }
 
       onAccepted: passwordForm.accepted()
 
@@ -47,16 +60,16 @@ RowLayout {
             duration: Math.max((passwordText.text.length - 30) * 200, 200)
          }
       }
-      GlowRect {
-         id: errorGlow
-         anchors.fill: passwordText
-         color: visuals.errorGlowColor
-      }
    }
    Button {
       id: button
-      text: qsTr("Show")
-      Layout.preferredHeight: passwordText.height
-      style: WalletButtonStyle {}
+      height: units.dp(48)
+      Layout.preferredHeight: passwordText.height / 1.7
+
+      Icon {
+         name: "image/remove_red_eye"
+         anchors.centerIn: parent
+         size: units.dp(32)
+      }
    }
 }

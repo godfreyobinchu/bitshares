@@ -7,7 +7,7 @@
 #include <stdint.h>
 #include <vector>
 
-#define BTS_EXPECTED_CHAIN_ID       digest_type( "a2102104f63c0b2d0262c71ab3f1f58ccf8293d8cd059f94f28505c4af7d7ffe" )
+#define BTS_EXPECTED_CHAIN_ID       digest_type( "6ae7455c7af731c05698dae7100345ba0e4e229b99672d025201a80909cb8092" )
 #define BTS_DESIRED_CHAIN_ID        digest_type( "75c11a81b7670bbaa721cc603eadb2313756f94a3bcbb9928e9101432701ac5f" )
 
 #define BTS_V0_4_0_FORK_BLOCK_NUM    274000
@@ -25,10 +25,13 @@
 #define BTS_V0_4_23_FORK_BLOCK_NUM   871000
 #define BTS_V0_4_24_FORK_BLOCK_NUM   991700
 #define BTS_V0_4_26_FORK_BLOCK_NUM  1315314
-#define DVS_V0_5_0_FORK_BLOCK_NUM   1575500
-
-#define BTS_V0_4_28_FORK_BLOCK_NUM  9999999
-#define BTS_V0_4_29_FORK_BLOCK_NUM  9999999
+#define BTS_V0_5_0_FORK_BLOCK_NUM   1575500
+#define BTS_V0_6_0_FORK_BLOCK_NUM   1772200
+#define BTS_V0_6_1_FORK_BLOCK_NUM   BTS_V0_6_0_FORK_BLOCK_NUM
+#define BTS_V0_6_2_FORK_BLOCK_NUM   BTS_V0_6_0_FORK_BLOCK_NUM
+#define BTS_V0_6_3_FORK_BLOCK_NUM   BTS_V0_6_0_FORK_BLOCK_NUM
+#define BTS_V0_7_0_FORK_BLOCK_NUM   9999999
+#define BTS_V0_8_0_FORK_BLOCK_NUM   9999999
 
 #define BTS_FORK_TO_UNIX_TIME_LIST  ((BTS_V0_4_0_FORK_BLOCK_NUM,   "0.4.0",     1408064036)) \
                                     ((BTS_V0_4_9_FORK_2_BLOCK_NUM, "0.4.9",     1409193626)) \
@@ -44,7 +47,8 @@
                                     ((BTS_V0_4_23_FORK_BLOCK_NUM,  "0.4.23",    1414426032)) \
                                     ((BTS_V0_4_24_FORK_BLOCK_NUM,  "0.4.24",    1415398550)) \
                                     ((BTS_V0_4_26_FORK_BLOCK_NUM,  "0.4.26",    1418401491)) \
-                                    ((DVS_V0_5_0_FORK_BLOCK_NUM,   "0.5.0",     1421192371))
+                                    ((BTS_V0_5_0_FORK_BLOCK_NUM,   "0.5.0",     1421192371)) \
+                                    ((BTS_V0_6_0_FORK_BLOCK_NUM,   "0.6.0",     1423270604))
 
 namespace bts { namespace blockchain {
   uint32_t estimate_last_known_fork_from_git_revision_timestamp(uint32_t revision_time);

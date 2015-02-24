@@ -1,12 +1,13 @@
 #include <bts/blockchain/account_operations.hpp>
 #include <bts/blockchain/asset_operations.hpp>
 #include <bts/blockchain/balance_operations.hpp>
+#include <bts/blockchain/edge_operations.hpp>
 #include <bts/blockchain/feed_operations.hpp>
 #include <bts/blockchain/market_operations.hpp>
 #include <bts/blockchain/object_operations.hpp>
-#include <bts/blockchain/edge_operations.hpp>
 #include <bts/blockchain/operation_factory.hpp>
 #include <bts/blockchain/operations.hpp>
+#include <bts/blockchain/slate_operations.hpp>
 
 #include <fc/io/raw_variant.hpp>
 #include <fc/reflect/variant.hpp>
@@ -30,8 +31,9 @@ namespace bts { namespace blockchain {
    const operation_type_enum short_operation_v1::type               = short_op_type;
    const operation_type_enum cover_operation::type                  = cover_op_type;
    const operation_type_enum add_collateral_operation::type         = add_collateral_op_type;
+   const operation_type_enum update_call_price_operation::type      = update_call_price_op_type;
 
-   const operation_type_enum define_delegate_slate_operation::type  = define_delegate_slate_op_type;
+   const operation_type_enum define_slate_operation::type           = define_slate_op_type;
 
    const operation_type_enum update_feed_operation::type            = update_feed_op_type;
 
@@ -52,6 +54,7 @@ namespace bts { namespace blockchain {
    const operation_type_enum update_asset_ext_operation::type       = update_asset_ext_op_type;
 
    const operation_type_enum set_edge_operation::type               = set_edge_op_type;
+   const operation_type_enum pay_fee_operation::type               = pay_fee_op_type;
 
    static bool first_chain = []()->bool{
       bts::blockchain::operation_factory::instance().register_operation<withdraw_operation>();
@@ -71,8 +74,9 @@ namespace bts { namespace blockchain {
       bts::blockchain::operation_factory::instance().register_operation<short_operation_v1>();
       bts::blockchain::operation_factory::instance().register_operation<cover_operation>();
       bts::blockchain::operation_factory::instance().register_operation<add_collateral_operation>();
+      bts::blockchain::operation_factory::instance().register_operation<update_call_price_operation>();
 
-      bts::blockchain::operation_factory::instance().register_operation<define_delegate_slate_operation>();
+      bts::blockchain::operation_factory::instance().register_operation<define_slate_operation>();
 
       bts::blockchain::operation_factory::instance().register_operation<update_feed_operation>();
 
@@ -94,6 +98,7 @@ namespace bts { namespace blockchain {
       bts::blockchain::operation_factory::instance().register_operation<create_asset_proposal>();
 
       bts::blockchain::operation_factory::instance().register_operation<set_edge_operation>();
+      bts::blockchain::operation_factory::instance().register_operation<pay_fee_operation>();
 
       return true;
    }();
@@ -114,6 +119,13 @@ namespace bts { namespace blockchain {
    void operation_factory::from_variant( const fc::variant& in, bts::blockchain::operation& output )
    { try {
       auto obj = in.get_object();
+
+      if( obj[ "type" ].as_string() == "define_delegate_slate_op_type" )
+      {
+          output.type = define_slate_op_type;
+          return;
+      }
+
       output.type = obj["type"].as<operation_type_enum>();
 
       auto converter_itr = _converters.find( output.type.value );

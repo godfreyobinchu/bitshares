@@ -14,13 +14,12 @@ namespace bts { namespace blockchain {
 
         friend bool operator == ( const unique_transaction_key& a, const unique_transaction_key& b )
         {
-            return a.expiration == b.expiration && a.digest == b.digest;
+            return std::tie( a.expiration, a.digest ) == std::tie( b.expiration, b.digest );
         }
 
         friend bool operator < ( const unique_transaction_key& a, const unique_transaction_key& b )
         {
-            if( a.expiration != b.expiration ) return a.expiration < b.expiration;
-            return a.digest < b.digest;
+            return std::tie( a.expiration, a.digest ) < std::tie( b.expiration, b.digest );
         }
     };
 
@@ -50,7 +49,7 @@ namespace bts { namespace blockchain {
         std::function<void( const transaction& )>                                       erase_from_unique_set;
 
         otransaction_record lookup( const transaction_id_type& )const;
-        void store( const transaction_record& )const;
+        void store( const transaction_id_type&, const transaction_record& )const;
         void remove( const transaction_id_type& )const;
     };
 
