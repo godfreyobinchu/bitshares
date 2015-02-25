@@ -74,7 +74,6 @@ namespace bts { namespace client {
 
     struct config
     {
-<<<<<<< HEAD
        config( ) :
           default_peers(vector<string>{
 		  "54.68.193.243:2810"
@@ -118,11 +117,9 @@ namespace bts { namespace client {
           fc::optional<std::string> growl_notify_endpoint;
           fc::optional<std::string> growl_password;
           fc::optional<std::string> growl_bitshares_client_identifier;
-=======
         fc::logging_config  logging = fc::logging_config::default_config();
         bool                ignore_console = false;
         string              client_debug_name;
->>>>>>> upstream/master
 
         rpc_server_config   rpc;
 
