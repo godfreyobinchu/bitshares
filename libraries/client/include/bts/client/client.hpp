@@ -74,8 +74,6 @@ namespace bts { namespace client {
 
     struct config
     {
-    	config( ) :
-    	default_peers(vector<string>{"54.68.193.243:2810"}),
         fc::logging_config  logging = fc::logging_config::default_config();
         bool                ignore_console = false;
         string              client_debug_name;
