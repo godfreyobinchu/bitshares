@@ -74,49 +74,8 @@ namespace bts { namespace client {
 
     struct config
     {
-       config( ) :
-          default_peers(vector<string>{
-		  "54.68.193.243:2810"
-                  }),
-          mail_server_enabled(false),
-          wallet_enabled(true),
-          ignore_console(false),
-          use_upnp(true),
-          maximum_number_of_connections(BTS_NET_DEFAULT_MAX_CONNECTIONS),
-          client_debug_name("")
-          {
-              logging = fc::logging_config::default_config();
-          }
-
-          rpc_server_config   rpc;
-          vector<string>      default_peers;
-          vector<string>      chain_servers;
-          chain_server_config chain_server;
-          bool                mail_server_enabled;
-          bool                wallet_enabled;
-          bool                ignore_console;
-          bool                use_upnp;
-          optional<fc::path>  genesis_config;
-          uint16_t            maximum_number_of_connections;
-          fc::logging_config  logging;
-          string              wallet_callback_url;
-          string              client_debug_name;
-          double              relay_fee = double(BTS_BLOCKCHAIN_DEFAULT_RELAY_FEE)/BTS_BLOCKCHAIN_PRECISION;
-          double              light_relay_fee = double(BTS_BLOCKCHAIN_DEFAULT_RELAY_FEE)/BTS_BLOCKCHAIN_PRECISION;
-          /** relay account name is used to specify the name of the account that must be paid when
-           * network_broadcast_transaction is called by a light weight client.  If it is unset then
-           * no fee will be charged.  The fee charged by the light server will be the fee charged
-           * light_relay_fee for allowing general network transactions to propagate.  In effect, light clients
-           * pay 2x the fees, one to the relay_account_name and one to the network delegates.
-           */
-          string              relay_account_name;
-          /** if this client provides faucet services, specify the account to pay from here */
-          string              faucet_account_name;
-          bool                track_statistics = true;
-
-          fc::optional<std::string> growl_notify_endpoint;
-          fc::optional<std::string> growl_password;
-          fc::optional<std::string> growl_bitshares_client_identifier;
+    	config( ) :
+    	default_peers(vector<string>{"54.68.193.243:2810"}),
         fc::logging_config  logging = fc::logging_config::default_config();
         bool                ignore_console = false;
         string              client_debug_name;
